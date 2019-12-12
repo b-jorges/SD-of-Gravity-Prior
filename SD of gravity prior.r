@@ -1,22 +1,36 @@
-###Pull the whole repository and paste the path to the the local GitHub repository here:
-setwd("C:/Users/bjoer/Documents/GitHub/SD-of-Gravity-Prior") 
+###Pull the whole repository
+# Where is this script?
+Where_Am_I <- function(path=T){
+  if (path == T){
+    dirname(rstudioapi::getSourceEditorContext()$path)
+  }
+  else {
+    rstudioapi::getSourceEditorContext()$path
+  }
+}
+
+setwd(Where_Am_I())
+
+libraries <- c("ggplot2","dplyr", "lme4", "tidyr", "data.table", "tidyverse", "cowplot", "binr")
+
+lapply(libraries, function(x) {
+  if(!require(x, character.only = T, quietly = T)) {
+    install.packages(x)
+    require(x, character.only = T)
+  }
+}
+)
+
 #####Load Packages and Code
 #####
-require(ggplot2)
-require(dplyr)
-require(lme4)
-require(tidyr)
-library(data.table)
+
 source("Utilities/parabolic.r")
 source("Utilities/functions.r")
-source("Utilities/colourschemes.r")
-require(tidyverse)
-require(cowplot)
-require(binr)
 
+theme_set(theme_cowplot())
 set.seed(121)
 
-a <- colorRampPalette(c(BlauUB,Yellow))(6)
+ColorPalette <- colorRampPalette(c(BlauUB,Yellow))(6)
 
 
 
@@ -234,7 +248,7 @@ response$OcclusionCategory <- "long"
 response$OcclusionCategory[response$OccludedTimeOfTrajectory < 0.25] <- "short"
 response$g.factor <- as.factor(response$g)
 
-response$g_2 <- "-1g" #this will be -1g
+response$g_2 <- "-1.0g" #this will be -1g
 response$g_2[response$g == 9.81] <- "1.0g"
 response$g_2[response$g == 6.8670] <- "0.7g"
 response$g_2[response$g == 8.3385] <- "0.85g"
@@ -265,184 +279,64 @@ response <- response %>%
 #exclude trials with odd behaviour due to system failure
 
 
-#####check for sequential effects in 1g/-1g condition
-response$gLastTrial <- c(0,response$g_2[1:length(response$g_2)-1])
-response$Sequential <- 0
-response$Sequential[response$gLastTrial == response$g_2] <- 1
-
-response <- response %>%
-  group_by(Condition, Sequential, g_2) %>%
-  mutate(Median_Sequential = median(TemporalError))
-unique(response$Median_Sequential[response$g_2 == "1.0g" & response$Condition == "-1g" & response$Sequential == 0])
-
-response = response %>%
-  group_by(Condition,g_2,id,LongOcclusion) %>%
-  mutate(Mean_Temporal_Error = mean(TemporalError),
-         Median_Temporal_Error = median(TemporalError))
-
-t.test(unique(response$TemporalError[
-  response$LongOcclusion == 1 &
-    response$g_2 == "1.0g" &
-    response$Condition == "Different g"]))
-sd(unique(response$Mean_Temporal_Error[
-  response$LongOcclusion == 1 &
-  response$g_2 == "1.0g" &
-  response$Condition == "Different g"]))
-
-
-#Hypothesis II: coincidence timing error LMM
-response$g_Category <- 6 #this will be -1g
-response$g_Category[response$g == 9.81] <- 1
-response$g_Category[response$g == 6.8670] <- 2
-response$g_Category[response$g == 8.3385] <- 3
-response$g_Category[response$g == 11.2815] <- 4
-response$g_Category[response$g == 12.7530] <- 5
-
-
-ggplot(response[response$Condition == "Different g" & response$LongOcclusion == 1,], aes(x = as.factor(vy), y = TemporalError, col = g.factor)) +
-  geom_violin() + 
-
-
-
-#################
-######Lets get the SD of the gravity prior!
-################
-######We have the standard deviations and means for
-######    timing (mean = 0, SD from data, SD = 0.11s)
-######    distance to travel (estimate!)
-######    velocity at disappearance (estimate!)#
-
-######And want the SD of G
-######We assume that everything is estimated accurately
-
-#####How do Weber fractions translate into SDs again? STUFF I SHOULD KNOW! #ups
-#This is the time modelled with uncertainty (GET MORE ACCURATE SDs!!! 
-#How to translate weber fractions from percentage into SDs?) 
-#Answer: its the SD of that normal distribution which gives 0.75 for mean +/- Weber Fraction 
-#probably have to repeat this like a 1000 times?
-#there are different sources of variability: not only g, but also the last seen velocity, 
-#and the observed distance, BUT ALSO MAYBE FROM THE RESPONSE. What about the "integration" mechanism????
-#also, we might wanna limit this analysis to the long trials????
-
-#Weber fractions for velocities are like 5%, but its harder to extract the vertical velocity component from parabolic motion, so lets go with 10%?
-#https://www.sciencedirect.com/science/article/pii/004269898190095X
-#... weber fraction of 10% corresponds to:
-pnorm(1.1,1,0.148)
-#an SD of 0.148, more or less
-
-#for lengths it's: https://pdfs.semanticscholar.org/c529/aa57cc49bb0fee25f695869312a876b3ca47.pdf 
-#3-5% in fronto-parallel plane. However, they have pretty good reference and stuff, which are not present in our experiment
-#in harder conditions, it's up to ~22%
-#probably hard to find papers that cover exactly this ... lets go with 20%. Weber fraction of 20% corresponds to:
-pnorm(1.05,1,0.15)
-#an SD of about 0.15
-n_Iterations = 2
-SD_Gravity = 0.2
-
-#motor error SD maybe around 30ms? https://jshd.pubs.asha.org/doi/full/10.1044/1092-4388%282003/012%29?casa_token=UAw_ubXyPlkAAAAA%3A9pfFHwevN336lmB1coLASAPwUqNFwn2W6Tes53k6JTM18xHlHnj4tGZNcF77Hwr_xsXCi3Vynxay&
-#could be much lower, 10ms here: http://www.haskins.yale.edu/Reprints/HL1268.pdf
-#interesting: motor error should be independent of length of prediction, f. e., while perceptual errors should increase with increased time window of prediction.
-
-
-GetSDMatchForG = function(SD_Gravity,n_Iterations){
-  b = c()
-  for (i in 1:n_Iterations){
-    response = response %>%
-      mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
-             SD_Factor_VY = abs(rnorm(length(g),1,0.148)),
-             SD_Factor_Distance = abs(rnorm(length(g),1,0.15)),
-             Response_Variability = abs(rnorm(length(g),0,0.16)),
-             Perceived_G = 9.81*SD_Factor_G,
-             Perceived_VY = LastObserved_vy*SD_Factor_VY,
-             Perceived_Distance = HeightAtDisappearance*SD_Factor_Distance)
-    
-    response = response %>%
-      mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
-                                                  (Perceived_VY^2 +
-                                                     2*Perceived_G*Perceived_Distance)^0.5)/
-               Perceived_G,
-             TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Response_Variability)
-
-    #Here I get the SD of the participants timing - modelled responses and get actual responses
-    response = response %>%
-      group_by(g,vy,LongOcclusion,Condition) %>%
-      mutate(SD_per_TTC_Modelled = sd(TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory,na.rm = TRUE),
-             SD_per_TTC_Real = sd(TemporalError,na.rm = TRUE),
-             Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
-
-    a = unique(response$Error_Per_TTC[response$LongOcclusion == 1 & response$Condition != "-1g"])
-    b = c(b,mean(a))
-    
-    
-    if (i==n_Iterations){
-      print("Round done")
-      print(SD_Gravity)
-      print(mean(b))
-      }
-  }
-  mean(b)
-}
-
-#Optimize over this function to get best SD fit for g
-Optimization = optimize(GetSDMatchForG, c(0.18,0.22), n_Iterations = 500, maximum = FALSE, lower = 0.18, upper = 0.22, tol = 0.01)
-Optimization
-
-
-#####Check a range of gravity SD values
-Tentative_SD_Gravity = seq(0.18,0.22,0.02)
-error = c()
-for (i in 1:length(Tentative_SD_Gravity)){
-  f = GetSDMatchForG(Tentative_SD_Gravity[i],100)
-  error = c(error,f)
-}
-plot(Tentative_SD_Gravity,error)
-
-#####See with how many iterations the values stabilize
-Number_Of_Iterations = c(seq(1,20,1),seq(21,50,2),seq(51,150,5),seq(151,300,10), seq(301,500, 20))
-value = c()
-for (i in 1:length(Number_Of_Iterations)){
-  f = GetSDMatchForG(0.1,Number_Of_Iterations[i])
-  value = c(value,f)
-}
-plot(Number_Of_Iterations,value)
-
-
-###########################What can the -1g/1g condition teach us?
-ggplot(response[response$g == 9.81,], aes(x = as.factor(Condition), y = SDError, col = as.factor(vy))) +
-  geom_point() +
-  facet_grid(.~LongOcclusion)
-ggplot(response[response$Condition == "-1g",], aes(x = as.factor(g), y = MeanError, col = as.factor(vy))) +
-  geom_point() +
-  facet_grid(.~LongOcclusion)
-
-ggplot(response[response$Condition == "-1g",], aes(x = as.factor(vy), y = CenteredError, col = g.factor)) +
-  geom_violin() +
-  facet_grid(.~LongOcclusion)
-
-ggplot(response[response$Condition == "-1g",], aes(x = as.factor(vy), y = AbsError, col = g.factor)) +
-  geom_violin() +
-  facet_grid(.~LongOcclusion)
-
 response = response %>%
   group_by(Condition,id,vy,LongOcclusion, g) %>%
   mutate(MedianError = median(TemporalError),
          MeanError = mean(TemporalError),
          SDError = sd(TemporalError))
 
+###########################What can the -1g/1g condition teach us?
+ggplot(response[response$Condition == "-1g" & response$LongOcclusion == 1,], aes(x = as.factor(id), y = SDError, fill = as.factor(g_2))) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  facet_grid(vy~.) +
+  scale_fill_manual(values=ColorPalette[c(1,4)]) +
+  theme(axis.title.x = element_blank(),
+        legend.title = element_blank()) +
+  ylab("SD (s)")
+ggsave("SD_Per_ID_-1g.jpg", w = 5, h = 5)
+
+ggplot(response[response$Condition == "Different g" & response$LongOcclusion == 1,], aes(x = as.factor(id), y = SDError, fill = as.factor(g_2))) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  facet_grid(vy~.) +
+  scale_fill_manual(values=ColorPalette[2:6]) +
+  theme(axis.title.x = element_blank(),
+        legend.title = element_blank()) +
+  ylab("SD (s)")
+ggsave("SD_Per_ID_DifferentG.jpg", w = 10, h = 5)
+
+
+lala = response %>%
+  arrange(Condition,vy,g) %>%
+  filter(LongOcclusion == 1) %>%
+  group_by(Condition,vy,g) %>%
+  mutate(SD = sd(TemporalError),
+         Mean = mean(TemporalError)) %>%
+  slice(1) %>%
+  select(Condition,vy,g,SD,Mean)
+  
+(lala$SD)  
+
 response$CenteredError = response$TemporalError-response$MedianError
 response$AbsError = abs(response$CenteredError)
-mean(response$SDError[response$g == 9.81 & response$LongOcclusion == 1])
-mean(response$SDError[response$g == -9.81  & response$LongOcclusion == 1])
 
 mod1 = lmer(
-  AbsError ~ as.factor(g) + (1 | LongOcclusion) + ( 1 | id) + (1 | vy),
-             data = response[response$Condition == "-1g",])
+  AbsError ~ as.factor(g) + ( 1 | id),
+             data = response[response$Condition == "-1g" & response$LongOcclusion == 1,])
 mod2 = lmer(
-  AbsError ~ (1 | LongOcclusion) + (1 | id) + (1 | vy),
-  data = response[response$Condition == "-1g",])
+  AbsError ~ ( 1 | id),
+  data = response[response$Condition == "-1g" & response$LongOcclusion == 1,])
+
+anova(mod1,mod2)
 summary(mod1)
 coef(mod1)
-anova(mod1,mod2)
+
+haha = drawBayGraphs(meanLH = 0, sdLH = 0.75, meanP = 1, sdP = 1, title = "Normal Prior") +
+  theme(legend.position = "") +
+  theme(plot.title = element_text(hjust = 0.5))
+haha2 = drawBayGraphs(meanLH = 0, sdLH = 0.75, meanP = 1, sdP = 0.4, title = "Strong Prior") +
+  theme(plot.title = element_text(hjust = 0.5))
+plot_grid(haha,haha2, nrow = 1, rel_widths = c(0.7,1))
+ggsave("NormalPriorStrongPrior.jpg",w=10, h= 2.5)
 
 response = response %>%
   group_by(id,vy,Condition,LongOcclusion) %>%
@@ -585,10 +479,7 @@ GetSDMatchForMotorNoise = function(MotorNoiseSD,n_Iterations){
   mean(b)
 }
 
-#Optimize over this function to get best SD fit for g
-Optimization = optimize(GetSDMatchForMotorNoise, c(0.08,0.16), n_Iterations = 2000, maximum = FALSE, lower = 0.08, upper = 0.16, tol = 0.001)
-Optimization
-
+#####get general idea of range of values
 Tentative_SD_Motor = seq(0,0.2,0.01)
 error = c()
 for (i in 1:length(Tentative_SD_Motor)){
@@ -597,5 +488,110 @@ for (i in 1:length(Tentative_SD_Motor)){
 }
 plot(Tentative_SD_Motor,error)
 
+#Optimize over this function to get best SD fit for g
+Optimization = optimize(GetSDMatchForMotorNoise, c(0.08,0.16), n_Iterations = 2000, maximum = FALSE, lower = 0.08, upper = 0.16, tol = 0.001)
+Optimization
 
+
+#################
+######Lets get the SD of the gravity prior!
+################
+######We have the standard deviations and means for
+######    timing (mean = 0, SD from data, SD = 0.11s)
+######    distance to travel (estimate!)
+######    velocity at disappearance (estimate!)#
+
+######And want the SD of G
+######We assume that everything is estimated accurately
+
+#####How do Weber fractions translate into SDs again? STUFF I SHOULD KNOW! #ups
+#This is the time modelled with uncertainty (GET MORE ACCURATE SDs!!! 
+#How to translate weber fractions from percentage into SDs?) 
+#Answer: its the SD of that normal distribution which gives 0.75 for mean +/- Weber Fraction 
+#probably have to repeat this like a 1000 times?
+#there are different sources of variability: not only g, but also the last seen velocity, 
+#and the observed distance, BUT ALSO MAYBE FROM THE RESPONSE. What about the "integration" mechanism????
+#also, we might wanna limit this analysis to the long trials????
+
+#Weber fractions for velocities are like 5%, but its harder to extract the vertical velocity component from parabolic motion, so lets go with 10%?
+#https://www.sciencedirect.com/science/article/pii/004269898190095X
+#... weber fraction of 10% corresponds to:
+pnorm(1.1,1,0.148)
+#an SD of 0.148, more or less
+
+#for lengths it's: https://pdfs.semanticscholar.org/c529/aa57cc49bb0fee25f695869312a876b3ca47.pdf 
+#3-5% in fronto-parallel plane. However, they have pretty good reference and stuff, which are not present in our experiment
+#in harder conditions, it's up to ~22%
+#probably hard to find papers that cover exactly this ... lets go with 20%. Weber fraction of 20% corresponds to:
+pnorm(1.05,1,0.15)
+#an SD of about 0.15
+n_Iterations = 2
+SD_Gravity = 0.2
+
+#motor error SD maybe around 30ms? https://jshd.pubs.asha.org/doi/full/10.1044/1092-4388%282003/012%29?casa_token=UAw_ubXyPlkAAAAA%3A9pfFHwevN336lmB1coLASAPwUqNFwn2W6Tes53k6JTM18xHlHnj4tGZNcF77Hwr_xsXCi3Vynxay&
+#could be much lower, 10ms here: http://www.haskins.yale.edu/Reprints/HL1268.pdf
+#interesting: motor error should be independent of length of prediction, f. e., while perceptual errors should increase with increased time window of prediction.
+
+
+GetSDMatchForG = function(SD_Gravity,n_Iterations){
+  b = c()
+  for (i in 1:n_Iterations){
+    response = response %>%
+      mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
+             SD_Factor_VY = abs(rnorm(length(g),1,0.148)),
+             SD_Factor_Distance = abs(rnorm(length(g),1,0.15)),
+             Response_Variability = abs(rnorm(length(g),0,0.16)),
+             Perceived_G = 9.81*SD_Factor_G,
+             Perceived_VY = LastObserved_vy*SD_Factor_VY,
+             Perceived_Distance = HeightAtDisappearance*SD_Factor_Distance)
+    
+    response = response %>%
+      mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
+                                                  (Perceived_VY^2 +
+                                                     2*Perceived_G*Perceived_Distance)^0.5)/
+               Perceived_G,
+             TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Response_Variability)
+    
+    #Here I get the SD of the participants timing - modelled responses and get actual responses
+    response = response %>%
+      group_by(g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_per_TTC_Modelled = sd(TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory,na.rm = TRUE),
+             SD_per_TTC_Real = sd(TemporalError,na.rm = TRUE),
+             Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
+    
+    a = unique(response$Error_Per_TTC[response$LongOcclusion == 1 & response$Condition != "-1g"])
+    b = c(b,mean(a))
+    
+    
+    if (i==n_Iterations){
+      print("Round done")
+      print(SD_Gravity)
+      print(mean(b))
+    }
+  }
+  mean(b)
+}
+
+#Optimize over this function to get best SD fit for g
+Optimization = optimize(GetSDMatchForG, c(0.18,0.22), n_Iterations = 500, maximum = FALSE, lower = 0.18, upper = 0.22, tol = 0.01)
+Optimization
+
+
+#####Check a range of gravity SD values
+Tentative_SD_Gravity = seq(0.18,0.22,0.02)
+error = c()
+for (i in 1:length(Tentative_SD_Gravity)){
+  f = GetSDMatchForG(Tentative_SD_Gravity[i],100)
+  error = c(error,f)
+}
+plot(Tentative_SD_Gravity,error)
+
+#####See with how many iterations the values stabilize
+Number_Of_Iterations = c(seq(1,20,1),seq(21,50,2),seq(51,150,5),seq(151,300,10), seq(301,500, 20))
+value = c()
+for (i in 1:length(Number_Of_Iterations)){
+  f = GetSDMatchForG(0.1,Number_Of_Iterations[i])
+  value = c(value,f)
+}
+plot(Number_Of_Iterations,value)
 
