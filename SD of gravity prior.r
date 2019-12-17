@@ -17,8 +17,8 @@ lapply(libraries, function(x) {
   if(!require(x, character.only = T, quietly = T)) {
     install.packages(x)
     require(x, character.only = T)
+    }
   }
-}
 )
 
 #####Load Packages and Code
