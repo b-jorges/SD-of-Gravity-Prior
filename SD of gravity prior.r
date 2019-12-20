@@ -26,6 +26,9 @@ lapply(libraries, function(x) {
 
 source("Utilities/parabolic.r")
 source("Utilities/functions.r")
+source("Utilities/colourschemes.r")
+
+
 
 theme_set(theme_cowplot())
 set.seed(121)
@@ -522,9 +525,9 @@ pnorm(1.1,1,0.148)
 #for lengths it's: https://pdfs.semanticscholar.org/c529/aa57cc49bb0fee25f695869312a876b3ca47.pdf 
 #3-5% in fronto-parallel plane. However, they have pretty good reference and stuff, which are not present in our experiment
 #in harder conditions, it's up to ~22%
-#probably hard to find papers that cover exactly this ... lets go with 20%. Weber fraction of 20% corresponds to:
-pnorm(1.05,1,0.15)
-#an SD of about 0.15
+#probably hard to find papers that cover exactly this ... lets go with 10%. Weber fraction of 10% corresponds to:
+pnorm(1.1,1,0.148)
+#an SD of about 0.148
 n_Iterations = 2
 SD_Gravity = 0.2
 
