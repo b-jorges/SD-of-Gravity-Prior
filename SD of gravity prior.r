@@ -9,8 +9,15 @@ Where_Am_I <- function(path=T){
   }
 }
 
-setwd(Where_Am_I())
+setwd(Where_Am_I()) ###set working directory to where this file is
 
+
+#####Load Packages and Code
+#####
+
+source("Utilities/parabolic.r")
+source("Utilities/functions.r")
+source("Utilities/colourschemes.r")
 libraries <- c("ggplot2","dplyr", "lme4", "tidyr", "data.table", "tidyverse", "cowplot", "binr")
 
 lapply(libraries, function(x) {
@@ -21,12 +28,7 @@ lapply(libraries, function(x) {
   }
 )
 
-#####Load Packages and Code
-#####
 
-source("Utilities/parabolic.r")
-source("Utilities/functions.r")
-source("Utilities/colourschemes.r")
 
 
 
@@ -319,8 +321,7 @@ lala = response %>%
   
 (lala$SD)  
 
-response$CenteredError = response$TemporalError-response$MedianError
-response$AbsError = abs(response$CenteredError)
+
 
 mod1 = lmer(
   AbsError ~ as.factor(g) + ( 1 | id),
@@ -393,7 +394,6 @@ ggplot(response[response$LongOcclusion == 1 & response$Condition == "Different g
   theme(legend.position = "") +
   scale_fill_manual(values = c(a[1],a[2],a[3],a[4],a[5])) +
   facet_grid(.~vy)
-
 ggsave("TimingErrorObserved.jpg", w=10, h =5)
 
 c1 <- lmer(
@@ -581,7 +581,7 @@ Optimization
 
 
 #####Check a range of gravity SD values
-Tentative_SD_Gravity = seq(0.18,0.22,0.02)
+Tentative_SD_Gravity = seq(0.00,0.22,0.02)
 error = c()
 for (i in 1:length(Tentative_SD_Gravity)){
   f = GetSDMatchForG(Tentative_SD_Gravity[i],100)
@@ -598,3 +598,253 @@ for (i in 1:length(Number_Of_Iterations)){
 }
 plot(Number_Of_Iterations,value)
 
+
+
+
+GetSDMatchForRemainingNoise = function(SD,n_Iterations=500){
+  
+  Remaining_Response_Variability_SD = SD[1]
+  SD_Factor_Temporaldecay_SD = SD[2]
+  
+  b = c()
+  
+  SD_Acceleration = 0.222
+  SD_Velocity = 0.148
+  SD_Distance = 0.148
+  AF_Factor = 0.8
+  
+  for (i in 1:n_Iterations){
+    response = response %>%
+      mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Acceleration)),
+             SD_Factor_VY = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor,
+             SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+             Remaining_Response_Variability = rnorm(length(g),0,Remaining_Response_Variability_SD),
+             Perceived_G = 9.81*SD_Factor_G,
+             Perceived_VY = abs(LastObserved_vy)*SD_Factor_VY,
+             Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance,
+             SD_Factor_Temporaldecay = abs(rnorm(length(g),1,SD_Factor_Temporaldecay_SD)))
+    
+    response = response %>%
+      mutate(TemporalEstimateWithUncertainty = (- Perceived_VY +
+                                                  (Perceived_VY^2 +
+                                                     2*Perceived_G*Perceived_Distance)^0.5)/
+               Perceived_G,
+             TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty*SD_Factor_Temporaldecay + Remaining_Response_Variability)
+    
+    #Here I get the SD of the participants timing - modelled responses and get actual responses
+    
+    response = response %>%
+      group_by(id,g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_Sim_Aux = sd(TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory,na.rm = TRUE),
+             SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
+    
+    response = response %>%
+      group_by(g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_per_TTC_Modelled = mean(SD_Sim_Aux),
+             SD_per_TTC_Real = mean(SD_Real_Aux),
+             Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
+    
+    a = unique(response$Error_Per_TTC[response$Condition == "-1g" & response$g == -9.81])
+    b = c(b,mean(a))
+    
+    if (i==n_Iterations){
+      print("Round done")
+      print(c("Remaining: ", Remaining_Response_Variability_SD))
+      print(c("Temporal Decay: ", SD_Factor_Temporaldecay_SD))
+      print(mean(b))}
+  }
+  mean(b)
+}
+
+Optimization_2dimensional = optim(c(0.05,0.11), GetSDMatchForRemainingNoise)
+
+
+
+
+response3 = c()
+response2 = c()
+
+SD_Velocity = 0.148
+SD_Distance = 0.148
+AF_Factor = 0.8
+SD_Gravity = 0.22
+SD_RemainingVariability2 = 0.05
+Timing_Factor = 0
+
+for (i in 1:100){
+  response = response %>%
+    mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
+           SD_Factor_VY = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor,
+           SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+           Remaining_Response_Variability = rnorm(length(g),0,SD_RemainingVariability2),
+           Perceived_G = 9.81*SD_Factor_G,
+           Perceived_VY = abs(LastObserved_vy)*SD_Factor_VY,
+           Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance,
+           SD_Factor_Temporaldecay = abs(rnorm(length(g),1,Timing_Factor)))
+
+  response = response %>%
+    mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
+                           (Perceived_VY^2 +
+                              2*Perceived_G*Perceived_Distance)^0.5)/
+                  Perceived_G,
+           TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty*SD_Factor_Temporaldecay + Remaining_Response_Variability)
+
+  #Here I get the SD of the participants timing - modelled responses and get actual responses
+  response = response %>%
+    group_by(id,g,vy,LongOcclusion,Condition) %>%
+    mutate(SD_Sim_Aux = sd(TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory,na.rm = TRUE),
+           SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
+  
+  response = response %>%
+    group_by(g,vy,LongOcclusion,Condition) %>%
+    mutate(SD_per_TTC_Modelled = mean(SD_Sim_Aux),
+           SD_per_TTC_Real = mean(SD_Real_Aux),
+           Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
+  
+  response3 = response %>%
+    select(id,block,trial,g,vy_factor,Occlusion_factor,Condition,SD_per_TTC_Modelled,SD_per_TTC_Real,Perceived_Distance)
+  
+  response2 = rbind(response2,response3)
+  
+  print(i)
+}
+
+response$TemporalEstimateWithUncertainty
+
+response2 = response2 %>%
+  group_by(id,block,trial,g,vy,LongOcclusion,Condition) %>%
+  mutate(Modelled_SD = mean(SD_per_TTC_Modelled),
+         Real_SD = mean(SD_per_TTC_Real)) %>%
+  slice(1)
+
+response3 = rbind(response2,response2)
+response3$SD = c(response2$Modelled_SD,response2$Real_SD)
+response3$TypeOfSD = c(rep("Simulated",length(response2$g)),rep("Observed",length(response2$g)))
+
+
+ggplot(response3[response3$Condition == "-1g",],aes(x = as.factor(g), y = SD, color = TypeOfSD)) +
+  geom_point(size = 5) +
+  ylab("SD (s)") +
+  xlab("Gravity") +
+  theme(legend.position = "top") +
+  scale_color_manual(name = "",
+                     values = c(BlauUB,LightRed)) +
+  facet_grid(vy_factor~Occlusion_factor) +
+  scale_x_discrete(name = "Gravity (g)", 
+                   labels=c("-1g", "1g"))
+
+
+
+
+Remaining_Response_Variability_SD = 0.0007
+SD_Factor_Temporaldecay_SD = 0.06
+
+b = c()
+
+SD_Acceleration = 0.296
+SD_Velocity = 0.148
+SD_Distance = 0.148
+AF_Factor = 0.8
+n_Iterations = 500
+
+for (i in 1:n_Iterations){
+  response = response %>%
+    mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Acceleration)),
+           SD_Factor_VY = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor,
+           SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+           Remaining_Response_Variability = rnorm(length(g),0,Remaining_Response_Variability_SD),
+           Perceived_G = 9.81*SD_Factor_G,
+           Perceived_VY = abs(LastObserved_vy)*SD_Factor_VY,
+           Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance,
+           SD_Factor_Temporaldecay = abs(rnorm(length(g),1,SD_Factor_Temporaldecay_SD)))
+  
+  response = response %>%
+    mutate(TemporalEstimateWithUncertainty = (- Perceived_VY +
+                                                (Perceived_VY^2 +
+                                                   2*Perceived_G*Perceived_Distance)^0.5)/
+             Perceived_G,
+           TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty*SD_Factor_Temporaldecay + Remaining_Response_Variability)
+  
+  #Here I get the SD of the participants timing - modelled responses and get actual responses
+  
+  response = response %>%
+    group_by(id,g,vy,LongOcclusion,Condition) %>%
+    mutate(SD_Sim_Aux = sd(TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory,na.rm = TRUE),
+           SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
+  
+  response = response %>%
+    group_by(g,vy,LongOcclusion,Condition) %>%
+    mutate(SD_per_TTC_Modelled = mean(SD_Sim_Aux),
+           SD_per_TTC_Real = mean(SD_Real_Aux),
+           Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
+  
+  a = unique(response$Error_Per_TTC[response$Condition == "-1g" & response$g == -9.81])
+  b = c(b,mean(a))}
+
+mean(b)
+
+
+
+
+
+
+
+
+
+GetMatchForBoth = function(SD){
+  
+  SD_Gravity = SD[1]
+  SD_RemainingVariability = SD[2]
+  
+  b = c()
+  
+  SD_Velocity = 0.148
+  SD_Distance = 0.148
+  AF_Factor = 0.8
+  
+  for (i in 1:1000){
+    response = response %>%
+      mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
+             SD_Factor_VY = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor,
+             SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+             Remaining_Response_Variability = rnorm(length(g),0,SD_RemainingVariability),
+             Perceived_G = 9.81*SD_Factor_G,
+             Perceived_VY = LastObserved_vy*SD_Factor_VY,
+             Perceived_Distance = HeightAtDisappearance*SD_Factor_Distance)
+    
+    response = response %>%
+      mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
+                                                  (Perceived_VY^2 +
+                                                     2*Perceived_G*Perceived_Distance)^0.5)/
+               Perceived_G,
+             TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
+             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory)
+    
+    #Here I get the SD of the participants timing - modelled responses and get actual responses
+    
+    response = response %>%
+      group_by(id,g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_Sim_Aux = sd(TemporalError_Sim,na.rm = TRUE),
+             SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
+    
+    response2 = response %>%
+      group_by(g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_per_TTC_Modelled = mean(SD_Sim_Aux),
+             SD_per_TTC_Real = mean(SD_Real_Aux),
+             Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2) %>%
+      slice(1)
+    
+    a = unique(response2$Error_Per_TTC[response2$Condition == "Different g"])
+    b = c(b,mean(a))
+    
+    if (i==n_Iterations){
+      print("Round done")
+      print(SD_Gravity)
+      print(SD_RemainingVariability)
+      print(mean(b))
+    }
+  }
+  mean(b)
+}
+
+OptimTest = optim(c(0.04,0.2),GetMatchForBoth)
