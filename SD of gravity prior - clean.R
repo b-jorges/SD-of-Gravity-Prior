@@ -510,14 +510,15 @@ pnorm(1.1,1,0.148)
 #in harder conditions, it's up to ~22% (but in depth!!!); lets go with 10%. Weber fraction of 10% corresponds to:
 pnorm(1.1,1,0.148)
 #an SD of about 0.148 for the distance, more or less
+pnorm(1.07,1,0.104)
 
 GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Iterations){
 
   b = c()
   SD_Acceleration = 0.296
-  SD_Velocity = 0.1
+  SD_Velocity = 0.104
   SD_Distance = 0.148
-  SD_Angle = 0.1
+  SD_Angle = 0.104
   AF_Factor = 0.8
   
   for (i in 1:n_Iterations){
@@ -569,7 +570,7 @@ GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Itera
 }
 
 #####get general idea of range of values
-Tentative_SD_Remaining = seq(0,0.1,0.01) ###this takes a while!
+Tentative_SD_Remaining = seq(0,0.07,0.01) ###this takes a while!
 
 error_Remaining = c()
 for (i in 1:length(Tentative_SD_Remaining)){ 
