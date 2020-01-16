@@ -496,11 +496,15 @@ Errors_Mean %>%
 #an SD of 0.295, more or less
 pnorm(1.2,1,0.296)
 
-#Weber fractions for VELOCITIES are like 10%; which corresponds to an SD of ...
-pnorm(1.1,1,0.148)
-#... 0.148 for velocities, more or less
+#Weber fractions for VELOCITIES are like 5%, but maybe slightly higher for tagential velocities, so let's go with 7%
+pnorm(1.07,1,0.104)
+#... 0.104 for velocities, more or less
 #But this is the Weber fraction for the tangential speed. To isolate the vertical speed, 
 #we also need to isolate the angle between the tangential speed and the vertical.
+#JNDs of about 6° have been reported, this corresponds to a (non-standardized, because "higher angles" 
+#shouldnt correspond to higher JNDs, i. e. Weber's law doesnt apply)
+pnorm(0.06,0,0.089)
+#SD of 0.089 for the angles
 
 #So we need to estimate the angle, too. Variability for angles could be sort of the same again, like 10%?,
 # so again, a SD of 0.148 for the angle
@@ -510,7 +514,9 @@ pnorm(1.1,1,0.148)
 #in harder conditions, it's up to ~22% (but in depth!!!); lets go with 10%. Weber fraction of 10% corresponds to:
 pnorm(1.1,1,0.148)
 #an SD of about 0.148 for the distance, more or less
-pnorm(1.07,1,0.104)
+
+
+Remaining_Response_Variability_SD = 0.03
 
 GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Iterations){
 
@@ -518,7 +524,7 @@ GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Itera
   SD_Acceleration = 0.296
   SD_Velocity = 0.104
   SD_Distance = 0.148
-  SD_Angle = 0.104
+  SD_Angle = 0.089
   AF_Factor = 0.8
   
   for (i in 1:n_Iterations){
@@ -526,17 +532,17 @@ GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Itera
       mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Acceleration)),
              SD_Factor_VTan = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor, #account for Aubert-Fleischl
              SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
-             SD_Factor_Angle = abs(rnorm(length(g),1,SD_Angle)),
+             SD_Factor_Angle = abs(rnorm(length(g),0,SD_Angle)),
              Remaining_Response_Variability = rnorm(length(g),0,Remaining_Response_Variability_SD),
              Perceived_G = 9.81*SD_Factor_G,
              Actual_VTan = (LastObserved_vy^2+vx^2)^0.5, #pythagoras
-             Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan, #tangens ratio
+             Perceived_VTan = abs(abs(Actual_VTan)+SD_Factor_VTan), #tangens ratio
              ActualAngle = atan(vx/LastObserved_vy), #get actual angle
-             Perceived_Angle = (abs(ActualAngle)*SD_Factor_Angle),
+             Perceived_Angle = (abs(ActualAngle)+SD_Factor_Angle),
              Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan, #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
              Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance)
-    
-    response = response %>%
+
+      response = response %>%
       mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
                                                   (Perceived_VY^2 +
                                                      2*Perceived_G*Perceived_Distance)^0.5)/
@@ -600,9 +606,9 @@ GetSDMatchForG = function(SD_Gravity,n_Iterations,SD_RemainingVariability){
   
   b = c()
 
-  SD_Velocity = 0.1
+  SD_Velocity = 0.104
   SD_Distance = 0.148
-  SD_Angle = 0.1
+  SD_Angle = 0.089
   AF_Factor = 0.8
   
   for (i in 1:n_Iterations){
@@ -610,13 +616,13 @@ GetSDMatchForG = function(SD_Gravity,n_Iterations,SD_RemainingVariability){
       mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
              SD_Factor_VTan = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor, #account for Aubert-Fleischl
              SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
-             SD_Factor_Angle = abs(rnorm(length(g),1,SD_Angle)),
+             SD_Factor_Angle = abs(rnorm(length(g),0,SD_Angle)),
              Remaining_Response_Variability = rnorm(length(g),0,Remaining_Response_Variability_SD),
              Perceived_G = 9.81*SD_Factor_G,
              Actual_VTan = (LastObserved_vy^2+vx^2)^0.5, #pythagoras
              Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan, #tangens ratio
              ActualAngle = atan(vx/LastObserved_vy), #get actual angle
-             Perceived_Angle = (abs(ActualAngle)*SD_Factor_Angle),
+             Perceived_Angle = (abs(ActualAngle)+SD_Factor_Angle),
              Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan, #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
              Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance)
 
@@ -672,8 +678,8 @@ ggsave("Range of Gravity SDs.jpg", w=4, h=4)
 
 
 #Optimize over this function to get best SD fit for g
-Optimization2 = optimize(GetSDMatchForG, c(0.15), n_Iterations = 1000, SD_RemainingVariability = SD_RemainingVariability, 
-                         maximum = FALSE, lower = 0.1, upper = 0.2, tol = 0.01)
+Optimization2 = optimize(GetSDMatchForG, c(0.2), n_Iterations = 1000, SD_RemainingVariability = SD_RemainingVariability, 
+                         maximum = FALSE, lower = 0.15, upper = 0.25, tol = 0.01)
 Optimized_SD_Gravity = Optimization2$minimum
 
 #get the correspondance in terms of "Weber fractions"
@@ -687,9 +693,9 @@ pnorm(8.78,9.81,Optimized_SD_Gravity*9.81)
 response3 = c()
 response2 = c()
 
-SD_Velocity = 0.1
+SD_Velocity = 0.107
 SD_Distance = 0.148
-SD_Angle = 0.1
+SD_Angle = 0.089
 AF_Factor = 0.8
 SD_Gravity = Optimized_SD_Gravity
 SD_RemainingVariability = SD_RemainingVariability
@@ -705,7 +711,7 @@ for (i in 1:100){
              Actual_VTan = (LastObserved_vy^2+vx^2)^0.5, #pythagoras
              Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan, #tangens ratio
              ActualAngle = atan(vx/LastObserved_vy), #get actual angle
-             Perceived_Angle = (abs(ActualAngle)*SD_Factor_Angle),
+             Perceived_Angle = (abs(ActualAngle)+SD_Factor_Angle),
              Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan, #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
              Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance)
 
