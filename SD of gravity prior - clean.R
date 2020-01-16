@@ -656,7 +656,7 @@ GetSDMatchForG = function(SD_Gravity,n_Iterations,SD_RemainingVariability){
 
 #####Check a range of gravity SD values
 
-Tentative_SD_Gravity = seq(0.1,0.3,0.02) ####Again, takes a while
+Tentative_SD_Gravity = seq(0,0.24,0.03) ####Again, takes a while
 error_Gravity = c()
 for (i in 1:length(Tentative_SD_Gravity)){
   f = GetSDMatchForG(Tentative_SD_Gravity[i],250,SD_RemainingVariability=0.04)
@@ -672,13 +672,13 @@ ggsave("Range of Gravity SDs.jpg", w=4, h=4)
 
 
 #Optimize over this function to get best SD fit for g
-Optimization2 = optimize(GetSDMatchForG, c(0.2), n_Iterations = 1000, SD_RemainingVariability = SD_RemainingVariability, 
-                         maximum = FALSE, lower = 0.2, upper = 0.3, tol = 0.01)
+Optimization2 = optimize(GetSDMatchForG, c(0.15), n_Iterations = 1000, SD_RemainingVariability = SD_RemainingVariability, 
+                         maximum = FALSE, lower = 0.1, upper = 0.2, tol = 0.01)
 Optimized_SD_Gravity = Optimization2$minimum
 
 #get the correspondance in terms of "Weber fractions"
-pnorm(9.09,9.81,1.07)
-9.81/9.09
+pnorm(8.78,9.81,Optimized_SD_Gravity*9.81)
+9.81/8.78
 
 
 ###########################
@@ -687,29 +687,34 @@ pnorm(9.09,9.81,1.07)
 response3 = c()
 response2 = c()
 
-SD_Velocity = 0.148
+SD_Velocity = 0.1
 SD_Distance = 0.148
+SD_Angle = 0.1
 AF_Factor = 0.8
 SD_Gravity = Optimized_SD_Gravity
 SD_RemainingVariability = SD_RemainingVariability
 
 for (i in 1:100){
     response = response %>%
-    mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
-           SD_Factor_VY = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor,
-           SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
-           Remaining_Response_Variability = rnorm(length(g),0,SD_RemainingVariability),
-           SD_Factor_Timing = abs(rnorm(length(g),1,SD_TimeDecay)),
-           Perceived_G = 9.81*SD_Factor_G,
-           Perceived_VY = LastObserved_vy*SD_Factor_VY,
-           Perceived_Distance = HeightAtDisappearance*SD_Factor_Distance)
+      mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
+             SD_Factor_VTan = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor, #account for Aubert-Fleischl
+             SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+             SD_Factor_Angle = abs(rnorm(length(g),1,SD_Angle)),
+             Remaining_Response_Variability = rnorm(length(g),0,Remaining_Response_Variability_SD),
+             Perceived_G = 9.81*SD_Factor_G,
+             Actual_VTan = (LastObserved_vy^2+vx^2)^0.5, #pythagoras
+             Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan, #tangens ratio
+             ActualAngle = atan(vx/LastObserved_vy), #get actual angle
+             Perceived_Angle = (abs(ActualAngle)*SD_Factor_Angle),
+             Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan, #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
+             Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance)
 
   response = response %>%
     mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
                                                 (Perceived_VY^2 +
                                                    2*Perceived_G*Perceived_Distance)^0.5)/
              Perceived_G,
-           TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty*SD_Factor_Timing + Remaining_Response_Variability,
+           TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
            TemporalError_Sim = (TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory))
                                                                
   #Here I get the SD of the participants timing - modelled responses and get actual responses
@@ -725,7 +730,7 @@ for (i in 1:100){
            Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
   
   response3 = response %>%
-    select(id,block,trial,g,vy_factor,Occlusion_factor,Condition,SD_per_TTC_Modelled,SD_per_TTC_Real,Perceived_Distance,SD_Real_Aux)
+    select(id,block,trial,vy,LongOcclusion, g,Condition,SD_per_TTC_Modelled,SD_per_TTC_Real,Perceived_Distance,SD_Real_Aux)
   
   response2 = rbind(response2,response3)
   
@@ -736,7 +741,16 @@ response2 = response2 %>%
   group_by(id,block,trial,g,vy,LongOcclusion,Condition) %>%
   mutate(Modelled_SD = mean(SD_per_TTC_Modelled),
          Real_SD = mean(SD_per_TTC_Real)) %>%
-  slice(1)
+  slice(1) %>%
+  mutate(vy_factor = case_when(
+            vy == 6 ~ "6 m/s",
+            vy == 4.5 ~ "4.5 m/s",
+            ),
+         Occlusion_factor = case_when(
+            LongOcclusion == 1 ~ "Long Occlusion",
+            LongOcclusion == 0 ~ "Short Occlusion",
+            )
+        )
 
 response3 = rbind(response2,response2)
 response3$SD = c(response2$Modelled_SD,response2$Real_SD)
@@ -1032,3 +1046,6 @@ InfluenceOfDifferentSDs = plot_grid(panel_Distances,panel_Remaining,panel_Veloci
                                     nrow = 2)
 InfluenceOfDifferentSDs
 ggsave("InfluenceOfDifferentSDs.jpg", w=12, h=12)
+
+
+https://iovs.arvojournals.org/article.aspx?articleid=2164131
