@@ -516,13 +516,11 @@ pnorm(1.1,1,0.148)
 #an SD of about 0.148 for the distance, more or less
 
 
-Remaining_Response_Variability_SD = 0.03
-
 GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Iterations){
 
   b = c()
   SD_Acceleration = 0.296
-  SD_Velocity = 0.104
+  SD_Velocity = 0.148
   SD_Distance = 0.148
   SD_Angle = 0.089
   AF_Factor = 0.8
@@ -536,10 +534,10 @@ GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Itera
              Remaining_Response_Variability = rnorm(length(g),0,Remaining_Response_Variability_SD),
              Perceived_G = 9.81*SD_Factor_G,
              Actual_VTan = (LastObserved_vy^2+vx^2)^0.5, #pythagoras
-             Perceived_VTan = abs(abs(Actual_VTan)+SD_Factor_VTan), #tangens ratio
+             Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan, #tangens ratio
              ActualAngle = atan(vx/LastObserved_vy), #get actual angle
-             Perceived_Angle = (abs(ActualAngle)+SD_Factor_Angle),
-             Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan, #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
+             Perceived_Angle = abs(ActualAngle)+SD_Factor_Angle,
+             Perceived_VY = abs(cos(Perceived_Angle)*Perceived_VTan), #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
              Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance)
 
       response = response %>%
@@ -593,7 +591,7 @@ ggsave("Range of Remaining Error SDs.jpg", w=4, h=4)
 
 
 #Optimize over this function to get best SD fit for the remaining error
-Optimization = optimize(GetSDMatchForRemainingNoise, c(0.03), n_Iterations = 1000, maximum = FALSE, lower = 0.02, upper = 0.06, tol = 0.001)
+Optimization = optimize(GetSDMatchForRemainingNoise, c(0.03), n_Iterations = 1000, maximum = FALSE, lower = 0.01, upper = 0.06, tol = 0.001)
 SD_RemainingVariability = Optimization$minimum
 
 #####################################
@@ -606,7 +604,7 @@ GetSDMatchForG = function(SD_Gravity,n_Iterations,SD_RemainingVariability){
   
   b = c()
 
-  SD_Velocity = 0.104
+  SD_Velocity = 0.148
   SD_Distance = 0.148
   SD_Angle = 0.089
   AF_Factor = 0.8
@@ -622,9 +620,10 @@ GetSDMatchForG = function(SD_Gravity,n_Iterations,SD_RemainingVariability){
              Actual_VTan = (LastObserved_vy^2+vx^2)^0.5, #pythagoras
              Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan, #tangens ratio
              ActualAngle = atan(vx/LastObserved_vy), #get actual angle
-             Perceived_Angle = (abs(ActualAngle)+SD_Factor_Angle),
+             Perceived_Angle = abs(ActualAngle)+SD_Factor_Angle,
              Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan, #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
-             Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance)
+             Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance
+             )
 
     response = response %>%
       mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
@@ -683,8 +682,8 @@ Optimization2 = optimize(GetSDMatchForG, c(0.2), n_Iterations = 1000, SD_Remaini
 Optimized_SD_Gravity = Optimization2$minimum
 
 #get the correspondance in terms of "Weber fractions"
-pnorm(8.78,9.81,Optimized_SD_Gravity*9.81)
-9.81/8.78
+pnorm(8.5,9.81,Optimized_SD_Gravity*9.81)
+9.81/8.5
 
 
 ###########################
@@ -693,12 +692,12 @@ pnorm(8.78,9.81,Optimized_SD_Gravity*9.81)
 response3 = c()
 response2 = c()
 
-SD_Velocity = 0.107
+SD_Velocity = 0.148
 SD_Distance = 0.148
 SD_Angle = 0.089
 AF_Factor = 0.8
 SD_Gravity = Optimized_SD_Gravity
-SD_RemainingVariability = SD_RemainingVariability
+SD_RemainingVariability = SD_RemainingVariability + 0.1
 
 for (i in 1:100){
     response = response %>%
@@ -781,8 +780,8 @@ ggplot(response3[response3$Condition == "Different g" & response3$TypeOfSD == "O
   ylab("SD (s)") +
   xlab("Gravity") +
   theme(legend.position = "top") +
-  scale_color_manual(name = "",
-                     values = colorRampPalette(c("grey",Yellow))(9)) +
+#  scale_color_manual(name = "",
+#                     values = colorRampPalette(c("grey",Yellow))(9)) +
   facet_grid(vy_factor~Occlusion_factor) +
   scale_x_discrete(name = "Gravity (g)", 
                    labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g"))
