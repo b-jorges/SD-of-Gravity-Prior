@@ -522,7 +522,7 @@ GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Itera
 
   b = c()
   SD_Acceleration = 0.296
-  SD_Velocity = 0.104
+  SD_Velocity = 0.148
   SD_Distance = 0.148
   SD_Angle = 0.089
   AF_Factor = 0.8
@@ -606,7 +606,7 @@ GetSDMatchForG = function(SD_Gravity,n_Iterations,SD_RemainingVariability){
   
   b = c()
 
-  SD_Velocity = 0.104
+  SD_Velocity = 0.148
   SD_Distance = 0.148
   SD_Angle = 0.089
   AF_Factor = 0.8
