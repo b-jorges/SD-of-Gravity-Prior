@@ -664,7 +664,7 @@ GetSDMatchForG = function(SD_Gravity,n_Iterations,SD_RemainingVariability){
 Tentative_SD_Gravity = seq(0,0.24,0.03) ####Again, takes a while
 error_Gravity = c()
 for (i in 1:length(Tentative_SD_Gravity)){
-  f = GetSDMatchForG(Tentative_SD_Gravity[i],250,SD_RemainingVariability=0.04)
+  f = GetSDMatchForG(Tentative_SD_Gravity[i],250,SD_RemainingVariability=SD_RemainingVariability)
   error_Gravity = c(error_Gravity,f)
 }
 
@@ -682,8 +682,8 @@ Optimization2 = optimize(GetSDMatchForG, c(0.2), n_Iterations = 1000, SD_Remaini
 Optimized_SD_Gravity = Optimization2$minimum
 
 #get the correspondance in terms of "Weber fractions"
-pnorm(8.5,9.81,Optimized_SD_Gravity*9.81)
-9.81/8.5
+pnorm(11.21,9.81,Optimized_SD_Gravity*9.81)
+11.21/9.81
 
 
 ###########################
@@ -697,7 +697,7 @@ SD_Distance = 0.148
 SD_Angle = 0.089
 AF_Factor = 0.8
 SD_Gravity = Optimized_SD_Gravity
-SD_RemainingVariability = SD_RemainingVariability + 0.1
+SD_RemainingVariability = SD_RemainingVariability
 
 for (i in 1:100){
     response = response %>%
@@ -762,7 +762,7 @@ response3$SD = c(response2$Modelled_SD,response2$Real_SD)
 response3$TypeOfSD = c(rep("Simulated",length(response2$g)),rep("Observed",length(response2$g)))
 
 #######Plot the SDs
-ggplot(response3[response3$Condition == "Different g",],aes(x = g, y = SD, color = TypeOfSD)) +
+Method1 = ggplot(response3[response3$Condition == "Different g",],aes(x = g, y = SD, color = TypeOfSD)) +
   geom_point(size = 5) +
   ylab("SD (s)") +
   xlab("Gravity") +
@@ -849,6 +849,9 @@ GetMatchForBoth = function(SD){
 }
 
 OptimTest = optim(c(0.04,0.2),GetMatchForBoth)
+SD_Gravity*9.81 #non standardized standard deviation of the strong gravity prior
+pnorm(10.87,9.81,SD_Gravity*9.81) #Weber Fraction is the difference between the mean and that point on a cummulative Gaussian where mean and standard deviation yield 0.25/0.75 ...
+10.87/9.81 #... in percent.
 
 
 
@@ -860,20 +863,25 @@ response2 = c()
 
 SD_Velocity = 0.148
 SD_Distance = 0.148
+SD_Angle = 0.089
 AF_Factor = 0.8
-SD_Gravity = OptimTest$minimum[1]
-SD_RemainingVariability = OptimTest$minimum[2]
+SD_Gravity = OptimTest$par[1]
+SD_RemainingVariability = OptimTest$par[2]
 
 for (i in 1:100){
   response = response %>%
     mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
-           SD_Factor_VY = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor,
+           SD_Factor_VTan = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor, #account for Aubert-Fleischl
            SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
-           Remaining_Response_Variability = rnorm(length(g),0,SD_RemainingVariability),
-          # SD_Factor_Timing = abs(rnorm(length(g),1,SD_TimeDecay)),
+           SD_Factor_Angle = abs(rnorm(length(g),1,SD_Angle)),
+           Remaining_Response_Variability = rnorm(length(g),0,Remaining_Response_Variability_SD),
            Perceived_G = 9.81*SD_Factor_G,
-           Perceived_VY = LastObserved_vy*SD_Factor_VY,
-           Perceived_Distance = HeightAtDisappearance*SD_Factor_Distance)
+           Actual_VTan = (LastObserved_vy^2+vx^2)^0.5, #pythagoras
+           Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan, #tangens ratio
+           ActualAngle = atan(vx/LastObserved_vy), #get actual angle
+           Perceived_Angle = (abs(ActualAngle)+SD_Factor_Angle),
+           Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan, #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
+           Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance)
   
   response = response %>%
     mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
@@ -886,6 +894,7 @@ for (i in 1:100){
   #Here I get the SD of the participants timing - modelled responses and get actual responses
   response = response %>%
     group_by(id,g,vy,LongOcclusion,Condition) %>%
+    filter()
     mutate(SD_Sim_Aux = sd(TemporalError_Sim,na.rm = TRUE),
            SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
   
@@ -896,7 +905,7 @@ for (i in 1:100){
            Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
   
   response3 = response %>%
-    select(id,block,trial,g,vy_factor,Occlusion_factor,Condition,SD_per_TTC_Modelled,SD_per_TTC_Real,Perceived_Distance,SD_Real_Aux)
+    select(id,block,trial,vy,LongOcclusion, g,Condition,SD_per_TTC_Modelled,SD_per_TTC_Real,Perceived_Distance,SD_Real_Aux)
   
   response2 = rbind(response2,response3)
   
@@ -907,14 +916,23 @@ response2 = response2 %>%
   group_by(id,block,trial,g,vy,LongOcclusion,Condition) %>%
   mutate(Modelled_SD = mean(SD_per_TTC_Modelled),
          Real_SD = mean(SD_per_TTC_Real)) %>%
-  slice(1)
+  slice(1) %>%
+  mutate(vy_factor = case_when(
+    vy == 6 ~ "6 m/s",
+    vy == 4.5 ~ "4.5 m/s",
+  ),
+  Occlusion_factor = case_when(
+    LongOcclusion == 1 ~ "Long Occlusion",
+    LongOcclusion == 0 ~ "Short Occlusion",
+  )
+  )
 
 response3 = rbind(response2,response2)
 response3$SD = c(response2$Modelled_SD,response2$Real_SD)
 response3$TypeOfSD = c(rep("Simulated",length(response2$g)),rep("Observed",length(response2$g)))
 
 #######Plot the SDs
-ggplot(response3[response3$Condition == "Different g",],aes(x = g, y = SD, color = TypeOfSD)) +
+Method2 = ggplot(response3[response3$Condition == "Different g",],aes(x = g, y = SD, color = TypeOfSD)) +
   geom_point(size = 5) +
   ylab("SD (s)") +
   xlab("Gravity") +
@@ -924,8 +942,9 @@ ggplot(response3[response3$Condition == "Different g",],aes(x = g, y = SD, color
   facet_grid(vy_factor~Occlusion_factor) +
   scale_x_discrete(name = "Gravity (g)", 
                    labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g"))
-ggsave("SimulatedSDs_2Fits.jpg", w=6, h=6)
 
+plot_grid(Method1,Method2, labels = c("A. Method 1", "B. Method 2" ))
+ggsave("SimulatedSDs_Fits_Both_Methods.jpg", w=12, h=6)
 
 ############################
 #######Make plot of how changes in different values effect the overall variability in different conditions
