@@ -1,0 +1,1079 @@
+###Pull the whole repository
+libraries <- c("ggplot2","dplyr", "lme4", "tidyr", "data.table", "tidyverse", "cowplot", "binr", "rstan", "brms")
+
+# Where is this script?
+Where_Am_I <- function(path=T){
+  if (path == T){
+    dirname(rstudioapi::getSourceEditorContext()$path)
+  }
+  else {
+    rstudioapi::getSourceEditorContext()$path
+  }
+}
+
+#set working directory to where this file is
+setwd(Where_Am_I())
+
+
+#####Load Packages and Code
+#####
+
+source("Utilities/parabolic.r")
+source("Utilities/functions.r")
+source("Utilities/colourschemes.r")
+
+lapply(libraries, function(x) {
+  if(!require(x, character.only = T, quietly = T)) {
+    install.packages(x)
+    require(x, character.only = T)
+  }
+}
+)
+
+#optimize for fitting of Bayesian Linear Mixed Models (packages "rstan", "bmrs")
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+Sys.setenv(LOCAL_CPPFLAGS = '-march=corei7')
+
+theme_set(theme_cowplot())
+set.seed(121) #set seed because there is some randomness involved later
+
+
+#####Begin data loading
+b_a1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Lisa_1.txt", header = TRUE)
+b_a1$Condition <- "-1g"
+b_a2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Lisa_2.txt", header = TRUE)
+b_a2$Condition <- "Different g"
+b_a3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Lisa_3.txt", header = TRUE)
+b_a3$Condition <- "Different g"
+b_a4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Lisa_4.txt", header = TRUE)
+b_a4$Condition <- "Different g"
+b_b1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Cristian_1.txt", header = TRUE)
+b_b1$Condition <- "Different g"
+b_b2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Cristian_2.txt", header = TRUE)
+b_b2$Condition <- "Different g"
+b_b3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Cristian_3.txt", header = TRUE)
+b_b3$Condition <- "Different g"
+b_b4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Cristian_4.txt", header = TRUE)
+b_b4$Condition <- "-1g"
+b_c1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Borja_1.txt", header = TRUE)
+b_c1$Condition <- "-1g"
+b_c2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Borja_2.txt", header = TRUE)
+b_c2$Condition <- "Different g"
+b_c3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Borja_3.txt", header = TRUE)
+b_c3$Condition <- "Different g"
+b_c4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Borja_4.txt", header = TRUE)
+b_c4$Condition <- "Different g"
+b_d1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Clara_1.txt", header = TRUE)
+b_d1$Condition <- "Different g"
+b_d2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Clara_2.txt", header = TRUE)
+b_d2$Condition <- "Different g"
+b_d3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Clara_3.txt", header = TRUE)
+b_d3$Condition <- "Different g"
+b_d4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Clara_4.txt", header = TRUE)
+b_d4$Condition <- "-1g"
+b_e1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Cristina_1.txt", header = TRUE)
+b_e1$Condition <- "-1g"
+b_e2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Cristina_2.txt", header = TRUE)
+b_e2$Condition <- "Different g"
+b_e3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Cristina_3.txt", header = TRUE)
+b_e3$Condition <- "Different g"
+b_e4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Cristina_4.txt", header = TRUE)
+b_e4$Condition <- "Different g"
+b_f1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Aniol_1.txt", header = TRUE)
+b_f1$Condition <- "Different g"
+b_f2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Aniol_2.txt", header = TRUE)
+b_f2$Condition <- "Different g"
+b_f3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Aniol_3.txt", header = TRUE)
+b_f3$Condition <- "Different g"
+b_f4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Aniol_4.txt", header = TRUE)
+b_f4$Condition <- "-1g"
+b_g1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Juan_1.txt", header = TRUE)
+b_g1$Condition <- "-1g"
+b_g2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Juan_2.txt", header = TRUE)
+b_g2$Condition <- "Different g"
+b_g3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Juan_3.txt", header = TRUE)
+b_g3$Condition <- "Different g"
+b_g4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Juan_4.txt", header = TRUE)
+b_g4$Condition <- "Different g"
+b_h1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Rodolfo_1.txt", header = TRUE)
+b_h1$Condition <- "Different g"
+b_h2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Rodolfo_2.txt", header = TRUE)
+b_h2$Condition <- "Different g"
+b_h3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Rodolfo_3.txt", header = TRUE)
+b_h3$Condition <- "Different g"
+b_h4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Rodolfo_4.txt", header = TRUE)
+b_h4$Condition <- "-1g"
+b_i1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Marco_1.txt", header = TRUE)
+b_i1$Condition <- "-1g"
+b_i2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Marco_2.txt", header = TRUE)
+b_i2$Condition <- "Different g"
+b_i3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Marco_3.txt", header = TRUE)
+b_i3$Condition <- "Different g"
+b_i4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Marco_4.txt", header = TRUE)
+b_i4$Condition <- "Different g"
+b_j1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Bjorn_1.txt", header = TRUE)
+b_j1$Condition <- "Different g"
+b_j2 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Bjorn_2.txt", header = TRUE)
+b_j2$Condition <- "Different g"
+b_j3 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Bjorn_3.txt", header = TRUE)
+b_j3$Condition <- "Different g"
+b_j4 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Bjorn_4.txt", header = TRUE)
+b_j4$Condition <- "-1g"
+
+
+
+b_a1$block <- 1
+b_a2$block <- 2
+b_a3$block <- 3
+b_a4$block <- 4
+b_b1$block <- 1
+b_b2$block <- 2
+b_b3$block <- 3
+b_b4$block <- 4
+b_c1$block <- 1
+b_c2$block <- 2
+b_c3$block <- 3
+b_c4$block <- 4
+b_d1$block <- 1
+b_d2$block <- 2
+b_d3$block <- 3
+b_d4$block <- 4
+b_e1$block <- 1
+b_e2$block <- 2
+b_e3$block <- 3
+b_e4$block <- 4
+b_f1$block <- 1
+b_f2$block <- 2
+b_f3$block <- 3
+b_f4$block <- 4
+b_g1$block <- 1
+b_g2$block <- 2
+b_g3$block <- 3
+b_g4$block <- 4
+b_h1$block <- 1
+b_h2$block <- 2
+b_h3$block <- 3
+b_h4$block <- 4
+b_i1$block <- 1
+b_i2$block <- 2
+b_i3$block <- 3
+b_i4$block <- 4
+b_j1$block <- 1
+b_j2$block <- 2
+b_j3$block <- 3
+b_f4$block <- 4
+
+b_a1$id <- "s01"
+b_a2$id <- "s01"
+b_a3$id <- "s01"
+b_a4$id <- "s01"
+
+b_b1$id <- "s02"
+b_b2$id <- "s02"
+b_b3$id <- "s02"
+b_b4$id <- "s02"
+
+b_c1$id <- "s03"
+b_c2$id <- "s03"
+b_c3$id <- "s03"
+b_c4$id <- "s03"
+
+b_d1$id <- "s04"
+b_d2$id <- "s04"
+b_d3$id <- "s04"
+b_d4$id <- "s04"
+
+b_e1$id <- "s05"
+b_e2$id <- "s05"
+b_e3$id <- "s05"
+b_e4$id <- "s05"
+
+b_f1$id <- "s06"
+b_f2$id <- "s06"
+b_f3$id <- "s06"
+b_f4$id <- "s06"
+b_g1$id <- "s07"
+b_g2$id <- "s07"
+b_g3$id <- "s07"
+b_g4$id <- "s07"
+b_h1$id <- "s08"
+b_h2$id <- "s08"
+b_h3$id <- "s08"
+b_h4$id <- "s08"
+b_i1$id <- "s09"
+b_i2$id <- "s09"
+b_i3$id <- "s09"
+b_i4$id <- "s09"
+b_j1$id <- "s10"
+b_j2$id <- "s10"
+b_j3$id <- "s10"
+b_j4$id <- "s10"
+
+response_1 <- rbind(b_a1,b_a2,b_a3,b_a4)
+response_2 <- rbind(b_b1,b_b2,b_b3,b_b4)
+response_3 <- rbind(b_c1,b_c2,b_c3,b_c4)
+response_4 <- rbind(b_d1,b_d2,b_d3,b_d4)
+response_5 <- rbind(b_e1,b_e2,b_e3,b_e4)
+response_6 <- rbind(b_f1,b_f2,b_f3,b_f4)
+response_7 <- rbind(b_g1,b_g2,b_g3,b_g4)
+response_8 <- rbind(b_h1,b_h2,b_h3,b_h4)
+response_9 <- rbind(b_i1,b_i2,b_i3,b_i4)
+response_10 <- rbind(b_j1,b_j2,b_j3,b_j4)
+
+response <- rbind(response_1,response_2,response_3,response_4,response_5,response_6,response_7,response_8,response_9,
+                  response_10)
+
+remove(b_a1,b_a2,b_a3,b_a4,b_b1,b_b2,b_b3,b_b4,b_c1,b_c2,b_c3,b_c4,b_d1,b_d2,b_d3,b_d4,b_e1,b_e2,b_e3,b_e4,
+       b_f1,b_f2,b_f3,b_f4,b_g1,b_g2,b_g3,b_g4,b_i1,b_i2,b_i3,b_i4,b_j1,b_j2,b_j3,b_j4,
+       response_1,response_2,response_3,response_4,response_5,response_6,response_7,response_8,response_9,
+       response_10)
+#####End data loading
+
+
+#####make comparison plot between strong prior and normal prior (Figure 1)
+plot1 = drawBayGraphs(meanLH = 0, sdLH = 0.75, meanP = 1, sdP = 1, title = "Normal Prior") +
+  theme(legend.position = "") +
+  theme(plot.title = element_text(hjust = 0.5))
+plot2 = drawBayGraphs(meanLH = 0, sdLH = 0.75, meanP = 1, sdP = 0.4, title = "Strong Prior") +
+  theme(plot.title = element_text(hjust = 0.5))
+plot_grid(plot1,plot2, nrow = 1, rel_widths = c(0.7,1))
+ggsave("NormalPriorStrongPrior.jpg",w=10, h= 2.5)
+####
+
+
+#####Data preprocessing:
+#delete subject s09 because they always responded way too late, not at all in line with the other subjects
+ggplot(response, aes(id, TemporalError-0.049259)) + ###our projectors introduce a delay of 0.049259s which we correct for here
+  geom_violin() +
+  ylim(c(-1,1))
+#(positive temporal errors = too late, and vice-versa)
+
+#and reject all trials 
+#with an absolute temporal error of > 0.5s as outliers (see plot before)
+a = nrow(response)
+response = response[abs(response$TemporalError) < 0.5,]
+b = nrow(response)
+a-b
+response = response[-response$TemporalError < response$OccludedTimeOfTrajectory,]
+c = nrow(response)
+b-c
+response <- response[response$id != "s09",] 
+d = nrow(response)         
+c - d
+
+response = response %>%
+  group_by(Condition,id,vy,LongOcclusion, g) %>%
+  filter(abs(TemporalError - median(TemporalError)) < 3*sd(TemporalError))
+e = nrow(response)         
+d - e
+  
+#get median, mean and SD per Condition, ID, initial vertical velocity, Occlusion Category and gravity)
+response = response %>%
+  group_by(Condition,id,vy,LongOcclusion, g) %>%
+  mutate(MedianError = median(TemporalError),
+         MeanError = mean(TemporalError),
+         SDError = sd(TemporalError),
+         #get the absolute temporal error with respect to the median of each condition as proxy for precision
+         PrecisionProxy = abs(TemporalError - median(TemporalError)))
+
+
+#####End Data preprocessing
+
+#####Statistical analyses
+#is there a bias per gravity level?
+mod1 <- lmer(
+  formula = TemporalError ~ g + (1 | id),
+  #only look at Long Occlusion and non-inverted gravities
+  data = response[response$Condition == "Different g",] 
+)
+mod2 <- lmer(
+  formula = TemporalError ~  (1 | id),
+  #only look at Long Occlusion and non-inverted gravities
+  data = response[response$Condition == "Different g",]
+)
+anova(mod1,mod2) #yes, there is a bias
+summary(mod1) #the higher the gravity, the later the response (with respect to actual impact)
+
+#does precision differ between gravity levels
+
+
+mod_Precision = brm(bf(TemporalError ~ g + (1 | id), 
+                       sigma ~ g + (1 | id)), 
+                    data = response[response$Condition == "Different g",], 
+                    family = gaussian())
+
+Hypotheses = hypothesis(mod_Precision,c("sigma_g < 0"))
+Hypotheses$hypothesis$Post.Prob
+
+
+#plot these results
+response = response %>%
+  mutate(vy_factor = case_when(
+    vy == 4.5 ~ "4.5 m/s",
+    vy == 6 ~ "6 m/s"),
+    Occlusion_factor = case_when(
+      LongOcclusion == 1 ~ "Long Occlusion",
+      LongOcclusion == 0 ~ "Short Occlusion"
+    )
+  )
+
+#Figure 3: plot distributions of timing errors for each condition 
+a = colorRampPalette(c(BlauUB,Yellow))(6)
+ggplot(response[response$Condition == "Different g",], 
+       aes(as.factor(g),TemporalError,fill = as.factor(g))) + 
+  geom_violin() +
+  stat_summary(fun.y=mean, geom="point", shape=23, size=2) +
+  geom_boxplot(width=0.1) +
+  coord_cartesian(ylim = c(-0.5,+0.4)) +
+  scale_x_discrete(name = "Gravity (g)", 
+                     labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g")) +
+  ylab("Temporal Error (s)") +
+  theme(legend.position = "") +
+  scale_fill_manual(values = c(a[2],a[3],a[4],a[5],a[6])) +
+  facet_grid(Occlusion_factor~vy_factor) +
+  geom_hline(yintercept = 0)
+ggsave("TimingErrorObserved.jpg", w=10, h=6)
+
+#get values for the SD and the mean for each condition
+lala = response %>%
+arrange(Condition,vy,g,LongOcclusion) %>%
+  group_by(Condition,vy,g) %>%
+  mutate(SD = round(sd(TemporalError),2),
+         Mean = round(mean(TemporalError),2)) %>%
+  slice(1) %>%
+  select(Condition,vy,g,SD,Mean,LongOcclusion)
+
+#test whether absolute error (as proxy for precision) differs between 1g and -1g
+
+mod_Precision2 = brm(bf(TemporalError ~ g + (1 | id), 
+                                      sigma ~ g + (1 | id)), 
+                                   data = response[response$Condition == "-1g",], 
+                                   family = gaussian())
+
+Hypotheses = hypothesis(mod_Precision2,c("sigma_g < 0"))
+Hypotheses$hypothesis$Post.Prob
+
+
+mod5 = lmer(
+  PrecisionProxy ~ as.factor(g) + ( 1 | id),
+  #only look at Long Occlusion and inverted gravities
+  data = response[response$Condition == "-1g" & response$LongOcclusion == 1,])
+mod6 = lmer(
+  PrecisionProxy ~ ( 1 | id),
+  #only look at Long Occlusion and inverted gravities
+  data = response[response$Condition == "-1g" & response$LongOcclusion == 1,])
+anova(mod1,mod2,) #yes it does differ
+summary(mod1) #lower precision for -1g
+
+?anova
+############################
+#########SIMULATIONS########
+############################
+
+
+##########
+#####MEANS
+##########
+
+###Model mean responses, assuming that people assume 1g (not as a distribution, 
+###but as a fixed value) for all falling thingies
+response <- response %>%
+  ##Distance = (g/2)*t^2+vy*t+d0
+  #this is based on the physical formula for distance travelled from initial velocity, acceleration and time elapsed. 
+  #We ignore motion in x direction, we only care about the falling part
+  #Distance would be the whole trajectory from peak, d0 is the part of the trajectory that's already been travelled, 
+  #so the relevant value is the trajectory that still has to be travelled (aka Height of Disappearance)
+  ##0 = (g/2)*t^2+vy*t+d0-Distance (d0 - Distance = Height of Disappearance)     ##solve for time
+  mutate(TemporalError = TemporalError-0.049259,
+         ####get the time the object fell during the occlusion
+         PercentageOcclusion = OccludedTimeOfTrajectory/FlightDuration,
+         TimeFallingBeforeOcclusion = (0.5-PercentageOcclusion)*FlightDuration,
+         ####get the last velocity that is presented before occlusion:
+         LastObserved_vy = g*TimeFallingBeforeOcclusion,
+         ####get the last velocity they observed before occlusion, including a correction for Aubert-Fleischl effect 
+         ####(we perceived pursued object at 80% of its speed during smooth pursuit):
+         LastObserved_vy_AFcorrected = g*TimeFallingBeforeOcclusion*0.8,
+         ####Get the height at which the object disappears:
+         MaxHeight = getYAtPeak(vy,g),
+         HeightAtDisappearance = MaxHeight-TimeFallingBeforeOcclusion^2*(g/2),
+        
+         #get simulated values of the extrapolated motion:
+         EstimatedTimeUnder1gAssumption = (-LastObserved_vy + (LastObserved_vy^2+4*(9.81/2)*
+                                                                 (HeightAtDisappearance))^0.5)/(9.81),
+         EstimatedTimeUnder1gAssumption_AFcorrected = (-LastObserved_vy_AFcorrected + (LastObserved_vy_AFcorrected^2+
+                                                      4*(9.81/2)*
+                                                                 (HeightAtDisappearance))^0.5)/(9.81),
+         
+         #get the simulated temporal error based on actual occluded time and the simulated extrapolated duration:
+         TemporalErrorUnder1gAssumption = EstimatedTimeUnder1gAssumption-OccludedTimeOfTrajectory,
+         TemporalErrorUnder1gAssumption_AFcorrected = EstimatedTimeUnder1gAssumption_AFcorrected-OccludedTimeOfTrajectory)
+
+
+######Model prediction versus reality
+response <- response %>%
+  group_by(Condition,g,LongOcclusion,vy) %>%
+  mutate(Mean_Error_Obs = mean(TemporalError), #mean of temporal error per gravity, Condition, long/short occlusion and initial vertical velocity
+         SE_Error_Obs = sd(TemporalError)/(length(TemporalError))^2, #get Standard Error for observed temporal errors
+         Mean_TemporalErrorUnder1gAssumption = mean(TemporalErrorUnder1gAssumption[abs(TemporalError) < 0.5]), #get timing errors without AF correction
+         Mean_TemporalErrorUnder1gAssumption_AFcorrected = mean(TemporalErrorUnder1gAssumption_AFcorrected[abs(TemporalError) < 0.5])) #get timing errors with AF correction
+
+#####Make plot of observed timing errors and simulations (Figure 4)
+Errors_Obs = response %>%
+  group_by(Condition,g,LongOcclusion,vy) %>%
+  slice(1) %>%
+  filter(Condition == "Different g") %>%
+  select(Condition,g,LongOcclusion,vy,Error=Mean_Error_Obs)
+Errors_Obs$TypeOfError = "Obs. Error"
+Errors_Obs$ActualError = Errors_Obs$Error
+  
+Errors_AF = response %>%
+  group_by(Condition,g,LongOcclusion,vy) %>%
+  slice(1) %>%
+  filter(Condition == "Different g") %>%
+  select(Condition,g,LongOcclusion,vy,Error=Mean_TemporalErrorUnder1gAssumption_AFcorrected,ActualError=Mean_Error_Obs)
+Errors_AF$TypeOfError = "Sim. Error (AF)"
+
+Errors_NoAF = response %>%
+  group_by(Condition,g,LongOcclusion,vy) %>%
+  slice(1) %>%
+  filter(Condition == "Different g") %>%
+  select(Condition,g,LongOcclusion,vy,Error=Mean_TemporalErrorUnder1gAssumption,ActualError=Mean_Error_Obs)
+Errors_NoAF$TypeOfError = "Sim. Error (No AF)"
+
+Errors_Mean = rbind(Errors_Obs,Errors_AF,Errors_NoAF) 
+Errors_Mean = Errors_Mean %>%
+  mutate(vy_factor = case_when(
+          vy == 4.5 ~ "4.5 m/s",
+          vy == 6 ~ "6 m/s"),
+        Occlusion_factor = case_when(
+          LongOcclusion == 1 ~ "Long Occlusion",
+          LongOcclusion == 0 ~ "Short Occlusion"
+        )
+      )
+
+#plot the observed mean errors per condition and gravity, and the simulations based on AF and No AF
+ggplot(Errors_Mean,aes(x = as.factor(g), y = Error, color = TypeOfError)) +
+  geom_point(size = 5) +
+  ylab("Error (s)") +
+  xlab("Gravity") +
+  ylim(c(-0.11,0.08)) +
+  theme(legend.position = "top",legend.text.align = 0.5) +
+  scale_color_manual(name = "",
+                     values = c(BlauUB,LightRed,Red)) +
+  facet_grid(vy_factor~Occlusion_factor) +
+  scale_x_discrete(name = "Gravity (g)", 
+                 labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g"))
+ggsave("SimulatedMeans.jpg", w=6, h=6)
+
+####compare squared mean errors for both models
+Errors_Mean %>% 
+  group_by(Condition,vy,LongOcclusion,TypeOfError) %>% 
+  mutate(RootMeanSquaredError = round((mean((Error-ActualError)^2))^0.5,5)) %>%
+  select(Condition,vy,LongOcclusion,TypeOfError,RootMeanSquaredError) %>%
+  filter(TypeOfError != "Obs. Error") %>% 
+  slice(1) #####Mean Squared Error between AF-Observed and No AF-Observed for all conditions separate
+
+Errors_Mean %>% 
+  group_by(TypeOfError) %>% 
+  mutate(RootMeanSquaredError = round((mean((Error-ActualError)^2))^0.5,5)) %>%
+  select(Condition,vy,LongOcclusion,TypeOfError,RootMeanSquaredError) %>%
+  filter(TypeOfError != "Obs. Error") %>% 
+  slice(1) #####Mean Squared Error between AF-Observed and No AF-Observed collapsed across conditions
+
+###############################################################################################################
+########################################## SIMULATIONS ########################################################
+###############################################################################################################
+
+#The basic idea is to identify all sources of variability and account for them, such that all remaining variability 
+#should be due to variability in the represented gravity value 
+
+
+#####################################
+######Get the motor variability
+#####################################
+#The gravity model should not be activated in the inverted motion trials
+#We can thus use Weber fractions for arbitrary accelerations to model 
+#how much of the error is not explained by any of the perceptual errors
+#this error should correspond to the motor error
+#We also know it has to be smaller than the variability in the condition with the least variability
+
+#####Weber fractions of like 20% for arbitrary gravities and accelerations 
+#(Jörges et al. 2018; + 1/2 because we maybe used some temporal information for that task)
+#corresponds to an SD of 0.295, more or less
+pnorm(1.2,1,0.296)
+
+#Weber fractions for angular velocities are around 10%
+pnorm(1.07,1,0.148)
+#SD of 0.148 for 
+#But this is the Weber fraction for the tangential speed. To isolate the vertical speed, 
+#we also need to isolate the angle between the tangential speed and the vertical.
+#JNDs of about 6° have been reported for orientation discrimination, this corresponds to a 
+#(non-standardized, because "higher angles" 
+#shouldnt correspond to higher JNDs, i. e. Weber's law doesnt apply)
+pnorm(0.06,0,0.089)
+#SD of 0.089 for the angles
+
+#for distances it's 3-5% in fronto-parallel plane.
+#However, they have pretty good reference and stuff, which are not present in our experiment
+#in harder conditions, it's up to ~22% (but in depth!!!); lets go with 10%. Weber fraction of 10% corresponds to:
+pnorm(1.1,1,0.148)
+#an SD of about 0.148 for the distance, more or less
+
+GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Iterations){
+
+  b = c()
+  SD_Acceleration = 0.296
+  SD_Velocity = 0.148
+  SD_Distance = 0.148
+  SD_Angle = 0.089
+  AF_Factor = 0.8
+  
+  for (i in 1:n_Iterations){
+    response = response %>%
+      mutate(#simulate variability for gravity representation:
+             SD_Factor_G = abs(rnorm(length(g),1,SD_Acceleration)),
+             
+             #simulate variability for perceived tangential velocity:
+             SD_Factor_VTan = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor, #account for Aubert-Fleischl
+             
+             #simulate variability for perceived distance: 
+             SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+             
+             #simulate variability for perceived angle:
+             SD_Factor_Angle = abs(rnorm(length(g),0,SD_Angle)),
+             
+             #simulate variability for "remaining error" = mostly motor error:
+             Remaining_Response_Variability = rnorm(length(g),0,Remaining_Response_Variability_SD),
+             
+             #get "perceived gravity" for each trial:
+             Perceived_G = 9.81*SD_Factor_G,
+             
+             #Get presented tangential speed (via Pythagoras: V_Tan^2 = v_vertical^2+v_horizontal^2):
+             Actual_VTan = (LastObserved_vy^2+vx^2)^0.5,
+             
+             #get perceived tangential velocity for each trial:
+             Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan,
+             
+             #get presented angle:
+             ActualAngle = atan(vx/LastObserved_vy), 
+             
+             #get perceived distance for each trial:
+             Perceived_Angle = abs(ActualAngle)+SD_Factor_Angle, 
+             
+             #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential ...
+             #... velocity and angle between tangential and vertical component:
+             Perceived_VY = abs(cos(Perceived_Angle)*Perceived_VTan), 
+
+             #get perceived distance for each trial:
+             Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance) 
+
+      response = response %>%
+      mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
+                                                  (Perceived_VY^2 +
+                                                     2*Perceived_G*Perceived_Distance)^0.5)/
+               Perceived_G,
+             TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
+             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory)
+
+    #Here I get the SD of the participants timing - modelled responses and get actual responses
+    response = response %>%
+      group_by(id,g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_Sim_Aux = sd(TemporalError_Sim,na.rm = TRUE),
+             SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
+    
+    #Here I get the SD of the participants timing - modelled responses and get actual responses
+    response2 = response %>%
+      group_by(g,vy,LongOcclusion,Condition) %>%
+      #median because, especially the observed SDs, are too influenced by outlier participants otherwise
+      mutate(SD_per_TTC_Modelled = median(SD_Sim_Aux), 
+             SD_per_TTC_Real = median(SD_Real_Aux),
+             Error_Per_TTC = ((SD_per_TTC_Real-SD_per_TTC_Modelled)^2)^0.5) %>%
+      slice(1) %>%
+      filter(g == -9.81)
+    
+    a = response2$Error_Per_TTC
+    b = c(b,mean(a))
+    
+    if (i==n_Iterations){
+      print("Round done")
+      print(Remaining_Response_Variability_SD)
+      print(mean(b))}
+  }
+  mean(b)
+}
+
+#####get general idea of range of values
+Tentative_SD_Remaining = seq(0,0.08,0.01) 
+error_Remaining = c()
+
+###this takes a while:
+for (i in 1:length(Tentative_SD_Remaining)){ 
+  f = GetSDMatchForRemainingNoise(Tentative_SD_Remaining[i],1000)
+  error_Remaining = c(error_Remaining,f)
+}
+
+#plot simulated SDs versus RMSE of observed SDs and simulated SDs (Figure 6)
+RangeOfValesSDRemainingError = data.frame(SD=Tentative_SD_Remaining,Error=error_Remaining)
+ggplot(RangeOfValesSDRemainingError, aes(SD,Error)) +
+  geom_point(size = 5) +
+  xlab("SD (s)") +
+  ylab("Error (s)")
+ggsave("Range of Remaining Error SDs.jpg", w=4, h=4)
+
+#Optimize over this function to get best SD fit for the remaining error
+Optimization = optimize(GetSDMatchForRemainingNoise, c(0.04), n_Iterations = 1000, maximum = FALSE, lower = 0.01, upper = 0.06, tol = 0.001)
+SD_RemainingVariability = Optimization$minimum
+
+#####################################
+######Get the Standard Deviation of the Gravity Prior
+#####################################
+
+
+
+#see annotations above
+GetSDMatchForG = function(SD_Gravity,n_Iterations,SD_RemainingVariability){
+  
+  b = c()
+
+  SD_Velocity = 0.148
+  SD_Distance = 0.148
+  SD_Angle = 0.089
+  AF_Factor = 0.8
+
+  for (i in 1:n_Iterations){
+    response = response %>%
+      mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
+             SD_Factor_VTan = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor,
+             SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+             SD_Factor_Angle = abs(rnorm(length(g),0,SD_Angle)),
+             Remaining_Response_Variability = rnorm(length(g),0,SD_RemainingVariability),
+             Perceived_G = 9.81*SD_Factor_G,
+             Actual_VTan = (LastObserved_vy^2+vx^2)^0.5,
+             Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan,
+             ActualAngle = atan(vx/LastObserved_vy),
+             Perceived_Angle = abs(ActualAngle)+SD_Factor_Angle,
+             Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan,
+             Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance
+             )
+
+    response = response %>%
+      mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
+                                                  (Perceived_VY^2 +
+                                                     2*Perceived_G*Perceived_Distance)^0.5)/
+               Perceived_G,
+             TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
+             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory)
+    
+    response = response %>%
+      group_by(id,g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_Sim_Aux = sd(TemporalError_Sim,na.rm = TRUE),
+             SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
+    
+    response2 = response %>%
+      select(g,vy,LongOcclusion,Condition,SD_Sim_Aux,SD_Real_Aux, id) %>%
+      group_by(g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_per_TTC_Modelled = median(SD_Sim_Aux),
+             SD_per_TTC_Real = median(SD_Real_Aux),
+             Error_Per_TTC = ((SD_per_TTC_Real-SD_per_TTC_Modelled)^2)^0.5) %>%
+      slice(1) %>%
+      filter(Condition == "Different g")
+
+    a = response2$Error_Per_TTC
+    b = c(b,mean(a))
+  
+    if (i==n_Iterations){
+      print("Round done")
+      print(SD_Gravity)
+      print(mean(b))}
+
+  }
+  mean(b)
+}
+
+#####Check a range of gravity SD values
+Tentative_SD_Gravity = seq(0,0.28,0.03) ####Again, takes a while
+error_Gravity = c()
+for (i in 1:length(Tentative_SD_Gravity)){
+  f = GetSDMatchForG(Tentative_SD_Gravity[i],1000,SD_RemainingVariability=Optimization$minimum)
+  error_Gravity = c(error_Gravity,f)
+}
+
+#####Figure 7
+RangeOfValesSDGravity = data.frame(SD=Tentative_SD_Gravity,Error=error_Gravity)
+ggplot(RangeOfValesSDGravity, aes(SD,Error)) +
+  geom_point(size=5) +
+  xlab("SD (m/s²)") +
+  ylab("Error (s)")
+ggsave("Range of Gravity SDs.jpg", w=4, h=4)
+
+#Optimize over this function to get best SD fit for g
+Optimization2 = optimize(GetSDMatchForG, c(0.21), n_Iterations = 1000, SD_RemainingVariability = Optimization$minimum, 
+                         maximum = FALSE, lower = 0.16, upper = 0.26, tol = 0.01)
+Optimized_SD_Gravity = Optimization2$minimum
+
+#get the correspondance in terms of "Weber fractions"
+Optimized_SD_Gravity*9.81 #non-standardized standard deviation
+pnorm(11.245,9.81,Optimized_SD_Gravity*9.81)
+11.245/9.81 #Weber Fraction
+
+
+
+
+############################
+#######Optimize over both values
+############################
+GetMatchForBoth = function(SD){
+  
+  SD_Gravity = SD[1]
+  SD_RemainingVariability = SD[2]
+  
+  b = c()
+  
+  SD_Velocity = 0.148
+  SD_Distance = 0.148
+  AF_Factor = 0.8
+  
+  for (i in 1:1000){
+    response = response %>%
+      mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
+             SD_Factor_VY = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor,
+             SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+             Remaining_Response_Variability = rnorm(length(g),0,SD_RemainingVariability),
+             Perceived_G = 9.81*SD_Factor_G,
+             Perceived_VY = LastObserved_vy*SD_Factor_VY,
+             Perceived_Distance = HeightAtDisappearance*SD_Factor_Distance)
+    
+    response = response %>%
+      mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
+                                                  (Perceived_VY^2 +
+                                                     2*Perceived_G*Perceived_Distance)^0.5)/
+               Perceived_G,
+             TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
+             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory)
+    
+    #Here I get the SD of the participants timing - modelled responses and get actual responses
+    
+    response = response %>%
+      group_by(id,g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_Sim_Aux = sd(TemporalError_Sim,na.rm = TRUE),
+             SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
+    
+    response2 = response %>%
+      group_by(g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_per_TTC_Modelled = median(SD_Sim_Aux),
+             SD_per_TTC_Real = median(SD_Real_Aux),
+             Error_Per_TTC = ((SD_per_TTC_Real-SD_per_TTC_Modelled)^2)^0.5) %>%
+      slice(1)
+    
+    a = unique(response2$Error_Per_TTC[response2$Condition == "Different g"])
+    b = c(b,mean(a))
+    
+    if (i==1000){
+      print("Round done")
+      print(SD_Gravity)
+      print(SD_RemainingVariability)
+      print(mean(b))
+    }
+  }
+  mean(b)
+}
+
+OptimTest = optim(c(0.04,0.2),GetMatchForBoth)
+SD_Gravity*9.81 #non standardized standard deviation of the strong gravity prior
+pnorm(11.01,9.81,SD_Gravity*9.81) #Weber Fraction is the difference between the mean and that point on a cummulative Gaussian where mean and standard deviation yield 0.25/0.75 ...
+11.01/9.81 #... in percent.
+
+
+
+
+###########################
+#######Make plot of SD fit between Observed and Simulated //
+###########################
+#######Stepwise optimization (METHOD 1)
+response3 = c()
+response2 = c()
+
+SD_Velocity = 0.148
+SD_Distance = 0.148
+SD_Angle = 0.089
+AF_Factor = 0.8
+SD_Gravity = Optimization2$minimum
+SD_RemainingVariability = Optimization$minimum
+
+for (i in 1:100){
+    response = response %>%
+      mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
+             SD_Factor_VTan = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor, #account for Aubert-Fleischl
+             SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+             SD_Factor_Angle = abs(rnorm(length(g),1,SD_Angle)),
+             Remaining_Response_Variability = rnorm(length(g),0,SD_RemainingVariability),
+             Perceived_G = 9.81*SD_Factor_G,
+             Actual_VTan = (LastObserved_vy^2+vx^2)^0.5, #pythagoras
+             Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan, #tangens ratio
+             ActualAngle = atan(vx/LastObserved_vy), #get actual angle
+             Perceived_Angle = (abs(ActualAngle)+SD_Factor_Angle),
+             Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan, #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
+             Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance)
+
+  response = response %>%
+    mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
+                                                (Perceived_VY^2 +
+                                                   2*Perceived_G*Perceived_Distance)^0.5)/
+             Perceived_G,
+           TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
+           TemporalError_Sim = (TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory))
+                                                               
+  #Here I get the SD of the participants timing - modelled responses and get actual responses
+  response = response %>%
+    group_by(id,g,vy,LongOcclusion,Condition) %>%
+    mutate(SD_Sim_Aux = sd(TemporalError_Sim,na.rm = TRUE),
+           SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
+  
+  response = response %>%
+    group_by(g,vy,LongOcclusion,Condition) %>%
+    mutate(SD_per_TTC_Modelled = median(SD_Sim_Aux),
+           SD_per_TTC_Real = median(SD_Real_Aux),
+           Error_Per_TTC = ((SD_per_TTC_Real-SD_per_TTC_Modelled)^2)^0.5)
+  
+  response2 = rbind(response2,response %>%
+                      select(id,block,trial,vy,LongOcclusion, g,Condition,SD_per_TTC_Modelled,SD_per_TTC_Real,Perceived_Distance,SD_Real_Aux))
+  
+  print(i)
+}
+
+response2 = response2 %>%
+  group_by(id,block,trial,g,vy,LongOcclusion,Condition) %>%
+  mutate(Modelled_SD = median(SD_per_TTC_Modelled),
+         Real_SD = median(SD_per_TTC_Real)) %>%
+  slice(1) %>%
+  mutate(vy_factor = case_when(
+            vy == 6 ~ "6 m/s",
+            vy == 4.5 ~ "4.5 m/s",
+            ),
+         Occlusion_factor = case_when(
+            LongOcclusion == 1 ~ "Long Occlusion",
+            LongOcclusion == 0 ~ "Short Occlusion",
+            )
+        )
+
+response3 = rbind(response2,response2)
+response3$SD = c(response2$Modelled_SD,response2$Real_SD)
+response3$TypeOfSD = c(rep("Sim. (Method 1)",length(response2$g)),rep("Observed",length(response2$g)))
+
+
+###########################
+#######Optimization over both motor variability and gravity variability (METHOD 2)
+
+
+response5 = c()
+response2 = c()
+
+SD_Velocity = 0.148
+SD_Distance = 0.148
+SD_Angle = 0.089
+AF_Factor = 0.8
+SD_Gravity = OptimTest$par[1]
+SD_RemainingVariability = OptimTest$par[2]
+
+for (i in 1:100){
+  response = response %>%
+    mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
+           SD_Factor_VTan = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor, #account for Aubert-Fleischl
+           SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+           SD_Factor_Angle = abs(rnorm(length(g),1,SD_Angle)),
+           Remaining_Response_Variability = rnorm(length(g),0,SD_RemainingVariability),
+           Perceived_G = 9.81*SD_Factor_G,
+           Actual_VTan = (LastObserved_vy^2+vx^2)^0.5, #pythagoras
+           Perceived_VTan = abs(Actual_VTan)*SD_Factor_VTan, #tangens ratio
+           ActualAngle = atan(vx/LastObserved_vy), #get actual angle
+           Perceived_Angle = (abs(ActualAngle)+SD_Factor_Angle),
+           Perceived_VY = abs(cos(Perceived_Angle))*Perceived_VTan, #vertical velocity is not sensed directly, it needs to be recovered from noisy info about tangential velocity and angle-to-vertical!
+           Perceived_Distance = abs(HeightAtDisappearance)*SD_Factor_Distance)
+  
+  response = response %>%
+    mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
+                                                (Perceived_VY^2 +
+                                                   2*Perceived_G*Perceived_Distance)^0.5)/
+             Perceived_G,
+           TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
+           TemporalError_Sim = (TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory))
+  
+  #Here I get the SD of the participants timing - modelled responses and get actual responses
+  response = response %>%
+    group_by(id,g,vy,LongOcclusion,Condition) %>%
+    mutate(SD_Sim_Aux = sd(TemporalError_Sim,na.rm = TRUE),
+           SD_Real_Aux = sd(TemporalError,na.rm = TRUE))
+  
+  response = response %>%
+    group_by(g,vy,LongOcclusion,Condition) %>%
+    mutate(SD_per_TTC_Modelled = median(SD_Sim_Aux),
+           SD_per_TTC_Real = median(SD_Real_Aux),
+           Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
+
+  response2 = rbind(response2,response %>%
+                      select(id,block,trial,vy,LongOcclusion, g,Condition,SD_per_TTC_Modelled,SD_per_TTC_Real,Perceived_Distance,SD_Real_Aux))
+  
+  print(i)
+}
+
+response2 = response2 %>%
+  group_by(id,block,trial,g,vy,LongOcclusion,Condition) %>%
+  mutate(Modelled_SD = median(SD_per_TTC_Modelled),
+         Real_SD = median(SD_per_TTC_Real)) %>%
+  slice(1) %>%
+  mutate(vy_factor = case_when(
+    vy == 6 ~ "6 m/s",
+    vy == 4.5 ~ "4.5 m/s",
+  ),
+  Occlusion_factor = case_when(
+    LongOcclusion == 1 ~ "Long Occlusion",
+    LongOcclusion == 0 ~ "Short Occlusion",
+  )
+  )
+
+response2$SD = response2$Modelled_SD
+response2$TypeOfSD = "Sim. (Method 2)"
+
+response4 = rbind(response3,response2)
+
+
+#######Plot the SDs (Figure 8)
+ggplot(response4[response4$Condition == "Different g",],aes(x = as.factor(g), y = SD, color = TypeOfSD)) +
+  geom_point(size = 5) +
+  ylab("SD (s)") +
+  xlab("Gravity") +
+  theme(legend.position = "top") +
+  scale_color_manual(name = "",
+                     values = c(BlauUB,LightRed, Red)) +
+  facet_grid(vy_factor~Occlusion_factor) +
+  scale_x_discrete(name = "Gravity (g)", 
+                   labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g"))
+ggsave("SimulatedSDs_Fits_Both_Methods.jpg", w=6, h=6)
+
+
+
+############################
+#######Make plot of how changes in different values effect the overall variability in different conditions (Figure 5)
+############################
+
+VaryDifferentValues = function(SD_Gravity,SD_Velocity,SD_Distance,SD_RemainingVariability){
+
+  for (i in 1:100){
+    response = response %>%
+      mutate(SD_Factor_G = abs(rnorm(length(g),1,SD_Gravity)),
+             SD_Factor_VY = abs(rnorm(length(g),1,SD_Velocity))*AF_Factor,
+             SD_Factor_Distance = abs(rnorm(length(g),1,SD_Distance)),
+             Remaining_Response_Variability = rnorm(length(g),0,SD_RemainingVariability),
+             Perceived_G = 9.81*SD_Factor_G,
+             Perceived_VY = LastObserved_vy*SD_Factor_VY,
+             Perceived_Distance = HeightAtDisappearance*SD_Factor_Distance)
+    
+    response = response %>%
+      mutate(TemporalEstimateWithUncertainty = (-Perceived_VY +
+                                                  (Perceived_VY^2 +
+                                                     2*Perceived_G*Perceived_Distance)^0.5)/
+               Perceived_G,
+             TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability)
+    
+    #Here I get the SD of the participants timing - modelled responses and get actual responses
+    response = response %>%
+      group_by(g,vy,LongOcclusion,Condition) %>%
+      mutate(SD_per_TTC_Modelled = sd(TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory,na.rm = TRUE),
+             SD_per_TTC_Real = sd(TemporalError,na.rm = TRUE),
+             Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
+    
+    response4 = response %>%
+      select(id,block,trial,g,vy_factor,Occlusion_factor,Condition,SD_per_TTC_Modelled,SD_per_TTC_Real,Perceived_Distance)
+    
+    response2 = rbind(response2,response4)
+    
+    print(i)
+  }
+  
+  response5 = response2 %>%
+    group_by(id,block,trial,g,vy,LongOcclusion,Condition) %>%
+    mutate(SD = mean(SD_per_TTC_Modelled),
+           TypeOfSD = "Lower Noise in Distance",
+           SD_Gravity = SD_Gravity,
+           SD_Velocity = SD_Velocity,
+           SD_Distance = SD_Distance,
+           SD_RemainingVariability = SD_RemainingVariability) %>%
+    slice(1)
+  
+  response5
+}
+
+DataFrame_Distances = c()
+Test_SDs = seq(0.1,0.3,(0.3-0.1)/4)
+for (i in Test_SDs){
+  DataFrame_Distances = rbind(DataFrame_Distances,VaryDifferentValues(SD_Gravity = 0.1,SD_Distance = i, SD_Velocity = 0.148, SD_RemainingVariability = 0.05))
+}
+
+DataFrame_Gravities = c()
+Test_SDs = seq(0.02,0.18,(0.18-0.02)/4)
+for (i in Test_SDs){
+  DataFrame_Gravities = rbind(DataFrame_Gravities,VaryDifferentValues(SD_Gravity = i,SD_Distance = 0.148, SD_Velocity = 0.148, SD_RemainingVariability = 0.05))
+}
+
+DataFrame_Remainings = c()
+Test_SDs = seq(0.02,0.1,(0.1-0.02)/4)
+for (i in Test_SDs){
+  DataFrame_Remainings = rbind(DataFrame_Remainings,VaryDifferentValues(SD_Gravity = 0.1,SD_Distance = 0.148, SD_Velocity = 0.148, SD_RemainingVariability = i))
+}
+
+DataFrame_Velocities = c()
+Test_SDs = seq(0.1,0.3,(0.3-0.1)/4)
+for (i in Test_SDs){
+  DataFrame_Velocities = rbind(DataFrame_Velocities,VaryDifferentValues(SD_Gravity = 0.1,SD_Distance = 0.148, SD_Velocity = i, SD_RemainingVariability = 0.05))
+}
+
+panel_Distances = ggplot(DataFrame_Distances[DataFrame_Distances$Condition == "Different g",],aes(x = as.factor(g), y = SD, color = as.factor(SD_Distance))) +
+  geom_point(size = 5) +
+  ylab("SD (s)") +
+  xlab("Gravity") +
+  theme(legend.position = "top") +
+  scale_color_manual(name = "SD Distance (m)",
+                     values = colorRampPalette(c("grey",Yellow))(6)) +
+  facet_grid(vy_factor~Occlusion_factor) +
+  scale_x_discrete(name = "Gravity (g)", 
+                   labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g"))
+
+panel_Gravity  = ggplot(DataFrame_Gravities[DataFrame_Gravities$Condition == "Different g",],aes(x = as.factor(g), y = SD, color = as.factor(SD_Gravity))) +
+  geom_point(size = 5) +
+  ylab("SD (s)") +
+  xlab("Gravity") +
+  theme(legend.position = "top") +
+  scale_color_manual(name = "SD Gravity (m/s²)",
+                     values = colorRampPalette(c("grey",Red))(6)) +
+  facet_grid(vy_factor~Occlusion_factor) +
+  scale_x_discrete(name = "Gravity (g)", 
+                   labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g"))
+
+panel_Remaining = ggplot(DataFrame_Remainings[DataFrame_Remainings$Condition == "Different g",],aes(x = as.factor(g), y = SD, color = as.factor(SD_RemainingVariability))) +
+  geom_point(size = 5) +
+  ylab("SD (s)") +
+  xlab("Gravity") +
+  theme(legend.position = "top") +
+  scale_color_manual(name = "SD Remaining Error (s)",
+                     values = colorRampPalette(c("grey",Turquoise))(6)) +
+  facet_grid(vy_factor~Occlusion_factor) +
+  scale_x_discrete(name = "Gravity (g)", 
+                   labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g"))
+
+panel_Velocity = ggplot(DataFrame_Velocities[DataFrame_Velocities$Condition == "Different g",],aes(x = as.factor(g), y = SD, color = as.factor(SD_Velocity))) +
+  geom_point(size = 5) +
+  ylab("SD (s)") +
+  xlab("Gravity") +
+  theme(legend.position = "top") +
+  scale_color_manual(name = "SD Velocity (m/s)",
+                     values = colorRampPalette(c("grey",Lila))(6)) +
+  facet_grid(vy_factor~Occlusion_factor) +
+  scale_x_discrete(name = "Gravity (g)", 
+                   labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g"))
+
+InfluenceOfDifferentSDs = plot_grid(panel_Distances,panel_Remaining,panel_Velocity,panel_Gravity, 
+                                    labels = "AUTO",
+                                    nrow = 2)
+InfluenceOfDifferentSDs
+ggsave("InfluenceOfDifferentSDs.jpg", w=12, h=12)

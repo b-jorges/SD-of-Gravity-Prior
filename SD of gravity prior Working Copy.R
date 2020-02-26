@@ -1,5 +1,5 @@
 ###Pull the whole repository
-libraries <- c("ggplot2","dplyr", "lme4", "tidyr", "data.table", "tidyverse", "cowplot", "binr")
+libraries <- c("ggplot2","dplyr", "lme4", "tidyr", "data.table", "tidyverse", "cowplot", "binr", "rstan", "brms")
 
 # Where is this script?
 Where_Am_I <- function(path=T){
@@ -22,9 +22,6 @@ source("Utilities/parabolic.r")
 source("Utilities/functions.r")
 source("Utilities/colourschemes.r")
 
-
-
-
 lapply(libraries, function(x) {
   if(!require(x, character.only = T, quietly = T)) {
     install.packages(x)
@@ -32,6 +29,11 @@ lapply(libraries, function(x) {
   }
 }
 )
+
+#optimize for fitting of Bayesian Linear Mixed Models (packages "rstan", "bmrs")
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+Sys.setenv(LOCAL_CPPFLAGS = '-march=corei7')
 
 theme_set(theme_cowplot())
 set.seed(121) #set seed because there is some randomness involved later
@@ -294,18 +296,15 @@ anova(mod1,mod2) #yes, there is a bias
 summary(mod1) #the higher the gravity, the later the response (with respect to actual impact)
 
 #does precision differ between gravity levels
-mod3 <- lmer(
-  formula = PrecisionProxy ~ g + (1 | id),
-  #only look at Long Occlusion and non-inverted gravities
-  data = response[response$Condition == "Different g" & response$LongOcclusion == 1,]
-)
-mod4 <- lmer(
-  formula = PrecisionProxy ~  (1 | id),
-  #only look at Long Occlusion and non-inverted gravities
-  data = response[response$Condition == "Different g" & response$LongOcclusion == 1,]
-)
-anova(mod3,mod4) #yes, it differs
-summary(mod4) #higher gravities = higher precision
+
+
+mod_Precision = brm(bf(TemporalError ~ g + (1 | id), 
+                       sigma ~ g + (1 | id)), 
+                    data = response[response$Condition == "Different g",], 
+                    family = gaussian())
+
+Hypotheses = hypothesis(mod_Precision,c("sigma_g < 0"))
+Hypotheses$hypothesis$Post.Prob
 
 
 #plot these results
@@ -346,6 +345,16 @@ arrange(Condition,vy,g,LongOcclusion) %>%
   select(Condition,vy,g,SD,Mean,LongOcclusion)
 
 #test whether absolute error (as proxy for precision) differs between 1g and -1g
+
+mod_Precision2 = brm(bf(TemporalError ~ g + (1 | id), 
+                                      sigma ~ g + (1 | id)), 
+                                   data = response[response$Condition == "-1g",], 
+                                   family = gaussian())
+
+Hypotheses = hypothesis(mod_Precision2,c("sigma_g < 0"))
+Hypotheses$hypothesis$Post.Prob
+
+
 mod5 = lmer(
   PrecisionProxy ~ as.factor(g) + ( 1 | id),
   #only look at Long Occlusion and inverted gravities
@@ -354,10 +363,10 @@ mod6 = lmer(
   PrecisionProxy ~ ( 1 | id),
   #only look at Long Occlusion and inverted gravities
   data = response[response$Condition == "-1g" & response$LongOcclusion == 1,])
-anova(mod1,mod2) #yes it does differ
+anova(mod1,mod2,) #yes it does differ
 summary(mod1) #lower precision for -1g
 
-
+?anova
 ############################
 #########SIMULATIONS########
 ############################
