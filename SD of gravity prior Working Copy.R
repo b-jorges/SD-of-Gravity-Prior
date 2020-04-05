@@ -244,7 +244,7 @@ ggsave("NormalPriorStrongPrior.jpg",w=10, h= 2.5)
 
 #####Data preprocessing:
 #delete subject s09 because they always responded way too late, not at all in line with the other subjects
-ggplot(response, aes(id, TemporalError-0.049259)) + ###our projectors introduce a delay of 0.049259s which we correct for here
+ggplot(response[response$Condition == "-1g",], aes(id, TemporalError-0.049259, color = as.factor(g))) + ###our projectors introduce a delay of 0.049259s which we correct for here
   geom_violin() +
   ylim(c(-1,1))
 #(positive temporal errors = too late, and vice-versa)
