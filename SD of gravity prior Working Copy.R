@@ -231,43 +231,81 @@ remove(b_a1,b_a2,b_a3,b_a4,b_b1,b_b2,b_b3,b_b4,b_c1,b_c2,b_c3,b_c4,b_d1,b_d2,b_d
 #####End data loading
 
 
+
 #####make comparison plot between strong prior and normal prior (Figure 1)
-plot1 = drawBayGraphs(meanLH = 0, sdLH = 0.75, meanP = 1, sdP = 1, title = "Normal Prior") +
-  theme(legend.position = "") +
-  theme(plot.title = element_text(hjust = 0.5))
-plot2 = drawBayGraphs(meanLH = 0, sdLH = 0.75, meanP = 1, sdP = 0.4, title = "Strong Prior") +
-  theme(plot.title = element_text(hjust = 0.5))
-plot_grid(plot1,plot2, nrow = 1, rel_widths = c(0.7,1))
-ggsave("NormalPriorStrongPrior.jpg",w=10, h= 2.5)
-####
+#plot1 = drawBayGraphs(meanLH = 0, sdLH = 0.75, meanP = 1, sdP = 1, title = "Normal Prior") +
+#  theme(legend.position = "") +
+#  theme(plot.title = element_text(hjust = 0.5))
+#plot2 = drawBayGraphs(meanLH = 0, sdLH = 0.75, meanP = 1, sdP = 0.4, title = "Strong Prior") +
+#  theme(plot.title = element_text(hjust = 0.5))
+#plot_grid(plot1,plot2, nrow = 1, rel_widths = c(0.7,1))
+#ggsave("NormalPriorStrongPrior.jpg",w=10, h= 2.5)
+###*/
 
 
 #####Data preprocessing:
 #delete subject s09 because they always responded way too late, not at all in line with the other subjects
-ggplot(response[response$Condition == "-1g",], aes(id, TemporalError-0.049259, color = as.factor(g))) + ###our projectors introduce a delay of 0.049259s which we correct for here
+ggplot(response, aes(as.factor(g), (TemporalError-0.049259+OccludedTimeOfTrajectory)/OccludedTimeOfTrajectory, fill = as.factor(g))) + ###our projectors introduce a delay of 0.049259s (on average) for which we correct here
   geom_violin() +
-  ylim(c(-1,1))
+  ylim(c(-0.5,7)) +
+  facet_wrap(id~LongOcclusion) +
+  geom_hline(linetype = 3, yintercept = 0.5) +
+  geom_hline(linetype = 3, yintercept = -0.5) +
+  geom_hline(linetype = 2, yintercept = 0) +
+  xlab("") +
+  ylab("Temporal Error (s)") +
+  scale_color_manual(name = NULL, 
+                     values = colorRampPalette(c(BlauUB,Yellow))(6)) +
+  stat_summary(fun.y=mean, geom="point", shape=23, size=2) +
+  geom_boxplot(width=0.1) +
+  scale_x_discrete(name = "", 
+                   labels=c("-1g", "0.7g", "0.85g", "1g", "1.15g", "1.3g")) +
+  ylab("Temporal Error (s)") +
+  theme(legend.position = "") +
+  scale_fill_manual(values = colorRampPalette(c(BlauUB,Yellow))(6))
+ggsave("DistributionBeforeOutlierRemoval.jpg",w = 12, h = 12)
+
+  
 #(positive temporal errors = too late, and vice-versa)
 
-#and reject all trials 
-#with an absolute temporal error of > 0.5s as outliers (see plot before)
+#exclude 
 a = nrow(response)
-response = response[abs(response$TemporalError) < 0.5,]
+response <- response[response$id != "s10",] 
 b = nrow(response)
 a-b
 response = response[-response$TemporalError < response$OccludedTimeOfTrajectory,]
-c = nrow(response)
-b-c
-response <- response[response$id != "s09",] 
-d = nrow(response)         
-c - d
 
-response = response %>%
-  group_by(Condition,id,vy,LongOcclusion, g) %>%
-  filter(abs(TemporalError - median(TemporalError)) < 3*sd(TemporalError))
-e = nrow(response)         
-d - e
-  
+response = response[response$TemporalError < 2,]
+c = nrow(response)
+b-c #number of excluded trials
+(b-c)/b #percentage of excluded trials
+
+response$TemporalError = (response$TemporalError-0.049259+response$OccludedTimeOfTrajectory)/response$OccludedTimeOfTrajectory
+
+
+#delete subject s09 because they always responded way too late, not at all in line with the other subjects
+ggplot(response, aes(as.factor(g), TemporalError, fill = as.factor(g))) + ###our projectors introduce a delay of 0.049259s (on average) for which we correct here
+  geom_violin() +
+  ylim(c(-0.5,7)) +
+  facet_wrap(id~LongOcclusion) +
+  geom_hline(linetype = 3, yintercept = 0.5) +
+  geom_hline(linetype = 3, yintercept = -0.5) +
+  geom_hline(linetype = 2, yintercept = 0) +
+  xlab("") +
+  ylab("Temporal Error (s)") +
+  scale_color_manual(name = NULL, 
+                     values = colorRampPalette(c(BlauUB,Yellow))(6)) +
+  stat_summary(fun.y=mean, geom="point", shape=23, size=2) +
+  geom_boxplot(width=0.1) +
+  scale_x_discrete(name = "", 
+                   labels=c("-1g", "0.7g", "0.85g", "1g", "1.15g", "1.3g")) +
+  ylab("Temporal Error (s)") +
+  theme(legend.position = "") +
+  scale_fill_manual(values = colorRampPalette(c(BlauUB,Yellow))(6))
+ggsave("DistributionAfterOutlierRemoval.jpg",w = 12, h = 12)
+
+
+
 #get median, mean and SD per Condition, ID, initial vertical velocity, Occlusion Category and gravity)
 response = response %>%
   group_by(Condition,id,vy,LongOcclusion, g) %>%
@@ -284,12 +322,12 @@ response = response %>%
 #is there a bias per gravity level?
 mod1 <- lmer(
   formula = TemporalError ~ g + (1 | id),
-  #only look at Long Occlusion and non-inverted gravities
+  #only look at non-inverted gravities
   data = response[response$Condition == "Different g",] 
 )
 mod2 <- lmer(
   formula = TemporalError ~  (1 | id),
-  #only look at Long Occlusion and non-inverted gravities
+  #only look at non-inverted gravities
   data = response[response$Condition == "Different g",]
 )
 anova(mod1,mod2) #yes, there is a bias
@@ -366,7 +404,8 @@ mod6 = lmer(
 anova(mod1,mod2,) #yes it does differ
 summary(mod1) #lower precision for -1g
 
-?anova
+
+
 ############################
 #########SIMULATIONS########
 ############################
@@ -385,7 +424,7 @@ response <- response %>%
   #Distance would be the whole trajectory from peak, d0 is the part of the trajectory that's already been travelled, 
   #so the relevant value is the trajectory that still has to be travelled (aka Height of Disappearance)
   ##0 = (g/2)*t^2+vy*t+d0-Distance (d0 - Distance = Height of Disappearance)     ##solve for time
-  mutate(TemporalError = TemporalError-0.049259,
+  mutate(TemporalError = TemporalError,
          ####get the time the object fell during the occlusion
          PercentageOcclusion = OccludedTimeOfTrajectory/FlightDuration,
          TimeFallingBeforeOcclusion = (0.5-PercentageOcclusion)*FlightDuration,
@@ -406,8 +445,8 @@ response <- response %>%
                                                                  (HeightAtDisappearance))^0.5)/(9.81),
          
          #get the simulated temporal error based on actual occluded time and the simulated extrapolated duration:
-         TemporalErrorUnder1gAssumption = EstimatedTimeUnder1gAssumption-OccludedTimeOfTrajectory,
-         TemporalErrorUnder1gAssumption_AFcorrected = EstimatedTimeUnder1gAssumption_AFcorrected-OccludedTimeOfTrajectory)
+         TemporalErrorUnder1gAssumption = EstimatedTimeUnder1gAssumption/OccludedTimeOfTrajectory,
+         TemporalErrorUnder1gAssumption_AFcorrected = EstimatedTimeUnder1gAssumption_AFcorrected/OccludedTimeOfTrajectory)
 
 
 ######Model prediction versus reality
@@ -574,7 +613,7 @@ GetSDMatchForRemainingNoise = function(Remaining_Response_Variability_SD,n_Itera
                                                      2*Perceived_G*Perceived_Distance)^0.5)/
                Perceived_G,
              TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
-             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory)
+             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD/OccludedTimeOfTrajectory)
 
     #Here I get the SD of the participants timing - modelled responses and get actual responses
     response = response %>%
@@ -663,7 +702,7 @@ GetSDMatchForG = function(SD_Gravity,n_Iterations,SD_RemainingVariability){
                                                      2*Perceived_G*Perceived_Distance)^0.5)/
                Perceived_G,
              TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
-             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory)
+             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD/OccludedTimeOfTrajectory)
     
     response = response %>%
       group_by(id,g,vy,LongOcclusion,Condition) %>%
@@ -750,7 +789,7 @@ GetMatchForBoth = function(SD){
                                                      2*Perceived_G*Perceived_Distance)^0.5)/
                Perceived_G,
              TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
-             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory)
+             TemporalError_Sim = TemporalEstimateWithUncertainty_AndResponseSD/OccludedTimeOfTrajectory)
     
     #Here I get the SD of the participants timing - modelled responses and get actual responses
     
@@ -822,7 +861,7 @@ for (i in 1:100){
                                                    2*Perceived_G*Perceived_Distance)^0.5)/
              Perceived_G,
            TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
-           TemporalError_Sim = (TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory))
+           TemporalError_Sim = (TemporalEstimateWithUncertainty_AndResponseSD/OccludedTimeOfTrajectory))
                                                                
   #Here I get the SD of the participants timing - modelled responses and get actual responses
   response = response %>%
@@ -897,7 +936,7 @@ for (i in 1:100){
                                                    2*Perceived_G*Perceived_Distance)^0.5)/
              Perceived_G,
            TemporalEstimateWithUncertainty_AndResponseSD = TemporalEstimateWithUncertainty + Remaining_Response_Variability,
-           TemporalError_Sim = (TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory))
+           TemporalError_Sim = (TemporalEstimateWithUncertainty_AndResponseSD/OccludedTimeOfTrajectory))
   
   #Here I get the SD of the participants timing - modelled responses and get actual responses
   response = response %>%
@@ -979,7 +1018,7 @@ VaryDifferentValues = function(SD_Gravity,SD_Velocity,SD_Distance,SD_RemainingVa
     #Here I get the SD of the participants timing - modelled responses and get actual responses
     response = response %>%
       group_by(g,vy,LongOcclusion,Condition) %>%
-      mutate(SD_per_TTC_Modelled = sd(TemporalEstimateWithUncertainty_AndResponseSD-OccludedTimeOfTrajectory,na.rm = TRUE),
+      mutate(SD_per_TTC_Modelled = sd(TemporalEstimateWithUncertainty_AndResponseSD/OccludedTimeOfTrajectory,na.rm = TRUE),
              SD_per_TTC_Real = sd(TemporalError,na.rm = TRUE),
              Error_Per_TTC = (SD_per_TTC_Real-SD_per_TTC_Modelled)^2)
     

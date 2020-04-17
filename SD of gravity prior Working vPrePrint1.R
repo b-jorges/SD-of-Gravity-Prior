@@ -38,7 +38,7 @@ Sys.setenv(LOCAL_CPPFLAGS = '-march=corei7')
 theme_set(theme_cowplot())
 set.seed(121) #set seed because there is some randomness involved later
 
-
+2*2*2*24*2
 #####Begin data loading
 b_a1 <- read.table("(3) Eye-tracking and Gravity/experiment 3a/Response_Lisa_1.txt", header = TRUE)
 b_a1$Condition <- "-1g"
