@@ -274,11 +274,12 @@ response <- response[response$id != "s10",]
 b = nrow(response)
 a-b
 response = response[-response$TemporalError < response$OccludedTimeOfTrajectory,]
-
-response = response[response$TemporalError < 2,]
 c = nrow(response)
-b-c #number of excluded trials
-(b-c)/b #percentage of excluded trials
+b-c
+response = response[response$TemporalError < 2,]
+d = nrow(response)
+c-d #number of excluded trials
+(b-d)/a #percentage of excluded trials
 
 response$TemporalError = (response$TemporalError-0.049259+response$OccludedTimeOfTrajectory)/response$OccludedTimeOfTrajectory
 
@@ -314,28 +315,10 @@ response = response %>%
          SDError = sd(TemporalError),
          #get the absolute temporal error with respect to the median of each condition as proxy for precision
          PrecisionProxy = abs(TemporalError - median(TemporalError)))
-
-
 #####End Data preprocessing
 
-#####Statistical analyses
-#is there a bias per gravity level?
-mod1 <- lmer(
-  formula = TemporalError ~ g + (1 | id),
-  #only look at non-inverted gravities
-  data = response[response$Condition == "Different g",] 
-)
-mod2 <- lmer(
-  formula = TemporalError ~  (1 | id),
-  #only look at non-inverted gravities
-  data = response[response$Condition == "Different g",]
-)
-anova(mod1,mod2) #yes, there is a bias
-summary(mod1) #the higher the gravity, the later the response (with respect to actual impact)
 
-#does precision differ between gravity levels
-
-
+#####Statistical analysis precision
 mod_Precision = brm(bf(TemporalError ~ g + (1 | id), 
                        sigma ~ g + (1 | id)), 
                     data = response[response$Condition == "Different g",], 
@@ -343,6 +326,35 @@ mod_Precision = brm(bf(TemporalError ~ g + (1 | id),
 
 Hypotheses = hypothesis(mod_Precision,c("sigma_g < 0"))
 Hypotheses$hypothesis$Post.Prob
+
+hypothesis(mod_Precision,c("sigma_g < 0"))
+
+coef(mod_Precision)
+
+#0.7g
+exp(-1.61+0.057*6.88670)
+exp(-1.61+0.050*6.88670)
+exp(-1.61+0.065*6.88670)
+
+#0.85g
+exp(-1.61+0.057*8.3385)
+exp(-1.61+0.050*8.3385)
+exp(-1.61+0.065*8.3385)
+
+#1g
+exp(-1.61+0.057*9.81)
+exp(-1.61+0.050*9.81)
+exp(-1.61+0.065*9.81)
+
+#1.15g
+exp(-1.61+0.057*11.2815)
+exp(-1.61+0.050*11.2815)
+exp(-1.61+0.065*11.2815)
+
+#1.3g
+exp(-1.61+0.057*12.7530)
+exp(-1.61+0.050*12.7530)
+exp(-1.61+0.065*12.7530)
 
 
 #plot these results
@@ -363,20 +375,20 @@ ggplot(response[response$Condition == "Different g",],
   geom_violin() +
   stat_summary(fun.y=mean, geom="point", shape=23, size=2) +
   geom_boxplot(width=0.1) +
-  coord_cartesian(ylim = c(-0.5,+0.4)) +
+  coord_cartesian(ylim = c(0,2.5)) +
   scale_x_discrete(name = "Gravity (g)", 
                      labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g")) +
-  ylab("Temporal Error (s)") +
+  ylab("Error Ratio") +
   theme(legend.position = "") +
   scale_fill_manual(values = c(a[2],a[3],a[4],a[5],a[6])) +
   facet_grid(Occlusion_factor~vy_factor) +
-  geom_hline(yintercept = 0)
+  geom_hline(linetype = 2, yintercept = 1)
 ggsave("TimingErrorObserved.jpg", w=10, h=6)
 
 #get values for the SD and the mean for each condition
 lala = response %>%
-arrange(Condition,vy,g,LongOcclusion) %>%
-  group_by(Condition,vy,g) %>%
+arrange(LongOcclusion,Condition,vy,g) %>%
+  group_by(Condition,vy,g,LongOcclusion) %>%
   mutate(SD = round(sd(TemporalError),2),
          Mean = round(mean(TemporalError),2)) %>%
   slice(1) %>%
@@ -391,18 +403,19 @@ mod_Precision2 = brm(bf(TemporalError ~ g + (1 | id),
 
 Hypotheses = hypothesis(mod_Precision2,c("sigma_g < 0"))
 Hypotheses$hypothesis$Post.Prob
+hypothesis(mod_Precision2,c("sigma_g < 0"))$hypothesis
 
+hypothesis(mod_Precision2,"exp(sigma_Intercept+sigma_g) < exp(sigma_Intercept)")
 
-mod5 = lmer(
-  PrecisionProxy ~ as.factor(g) + ( 1 | id),
-  #only look at Long Occlusion and inverted gravities
-  data = response[response$Condition == "-1g" & response$LongOcclusion == 1,])
-mod6 = lmer(
-  PrecisionProxy ~ ( 1 | id),
-  #only look at Long Occlusion and inverted gravities
-  data = response[response$Condition == "-1g" & response$LongOcclusion == 1,])
-anova(mod1,mod2,) #yes it does differ
-summary(mod1) #lower precision for -1g
+coef(mod_Precision2)
+
+exp(-0.96+0.011*9.81) #estimate
+exp(-0.96+0.014*9.81) #CI lower
+exp(-0.96+0.008*9.81) #CI upper
+
+exp(-0.96-0.011*9.81) #estimate
+exp(-0.96-0.014*9.81) #CI lower
+exp(-0.96-0.008*9.81) #CI upper
 
 
 
@@ -454,8 +467,17 @@ response <- response %>%
   group_by(Condition,g,LongOcclusion,vy) %>%
   mutate(Mean_Error_Obs = mean(TemporalError), #mean of temporal error per gravity, Condition, long/short occlusion and initial vertical velocity
          SE_Error_Obs = sd(TemporalError)/(length(TemporalError))^2, #get Standard Error for observed temporal errors
-         Mean_TemporalErrorUnder1gAssumption = mean(TemporalErrorUnder1gAssumption[abs(TemporalError) < 0.5]), #get timing errors without AF correction
-         Mean_TemporalErrorUnder1gAssumption_AFcorrected = mean(TemporalErrorUnder1gAssumption_AFcorrected[abs(TemporalError) < 0.5])) #get timing errors with AF correction
+         Mean_TemporalErrorUnder1gAssumption = mean(TemporalErrorUnder1gAssumption), #get timing errors without AF correction
+         Mean_TemporalErrorUnder1gAssumption_AFcorrected = mean(TemporalErrorUnder1gAssumption_AFcorrected)) #get timing errors with AF correction
+
+Errors_By_Participant = response %>%
+  group_by(Condition,g,LongOcclusion,vy,id) %>%
+  mutate(Mean_Error_Obs = mean(TemporalError),
+         SE_Error_Obs = sd(TemporalError)/(length(TemporalError))^2) %>%
+  filter(Condition == "Different g") %>%
+  slice(1) %>%
+  select(Condition,g,LongOcclusion,vy,Error=Mean_Error_Obs,TypeOfError = id)
+
 
 #####Make plot of observed timing errors and simulations (Figure 4)
 Errors_Obs = response %>%
@@ -463,7 +485,7 @@ Errors_Obs = response %>%
   slice(1) %>%
   filter(Condition == "Different g") %>%
   select(Condition,g,LongOcclusion,vy,Error=Mean_Error_Obs)
-Errors_Obs$TypeOfError = "Obs. Error"
+Errors_Obs$TypeOfError = "Error (Obs, Mean)"
 Errors_Obs$ActualError = Errors_Obs$Error
   
 Errors_AF = response %>%
@@ -471,16 +493,16 @@ Errors_AF = response %>%
   slice(1) %>%
   filter(Condition == "Different g") %>%
   select(Condition,g,LongOcclusion,vy,Error=Mean_TemporalErrorUnder1gAssumption_AFcorrected,ActualError=Mean_Error_Obs)
-Errors_AF$TypeOfError = "Sim. Error (AF)"
+Errors_AF$TypeOfError = "Error (Sim, AF)"
 
 Errors_NoAF = response %>%
   group_by(Condition,g,LongOcclusion,vy) %>%
   slice(1) %>%
   filter(Condition == "Different g") %>%
   select(Condition,g,LongOcclusion,vy,Error=Mean_TemporalErrorUnder1gAssumption,ActualError=Mean_Error_Obs)
-Errors_NoAF$TypeOfError = "Sim. Error (No AF)"
+Errors_NoAF$TypeOfError = "Error (Sim, No AF)"
 
-Errors_Mean = rbind(Errors_Obs,Errors_AF,Errors_NoAF) 
+Errors_Mean = rbind(Errors_Obs,Errors_AF,Errors_NoAF,Errors_By_Participant) 
 Errors_Mean = Errors_Mean %>%
   mutate(vy_factor = case_when(
           vy == 4.5 ~ "4.5 m/s",
@@ -492,32 +514,39 @@ Errors_Mean = Errors_Mean %>%
       )
 
 #plot the observed mean errors per condition and gravity, and the simulations based on AF and No AF
-ggplot(Errors_Mean,aes(x = as.factor(g), y = Error, color = TypeOfError)) +
-  geom_point(size = 5) +
-  ylab("Error (s)") +
-  xlab("Gravity") +
-  ylim(c(-0.11,0.08)) +
-  theme(legend.position = "top",legend.text.align = 0.5) +
+ggplot() +
+  geom_point(size = 2.5,data=Errors_Mean %>% filter(!TypeOfError %in% c("Error (Obs, Mean)","Error (Sim, AF)", "Error (Sim, No AF)")),
+             aes(x = g, y = Error, color = TypeOfError),alpha=0.5) +
+  geom_point(size = 4, data=Errors_Mean %>% filter(TypeOfError %in% c("Error (Obs, Mean)","Error (Sim, AF)", "Error (Sim, No AF)")),
+             aes(x = g, y = Error, color = TypeOfError)) +
+  geom_line(size = 1,data=Errors_Mean %>% filter(!TypeOfError %in% c("Error (Obs, Mean)","Error (Sim, AF)", "Error (Sim, No AF)")),
+             aes(x = g, y = Error, color = TypeOfError),alpha=0.5) +
+  geom_line(size = 2, data=Errors_Mean %>% filter(TypeOfError %in% c("Error (Obs, Mean)","Error (Sim, AF)", "Error (Sim, No AF)")),
+             aes(x = g, y = Error, color = TypeOfError)) +
+  ylab("Error Ratio") +
+  theme(legend.text.align = 0.5) +
   scale_color_manual(name = "",
-                     values = c(BlauUB,LightRed,Red)) +
+                     values = c(BlauUB,LightRed,Red,colorRampPalette(c("grey","black"))(9)),
+                     labels=c("Mean\nObs.\nError","Sim.\nError\n(AF)", "Sim.\nError\n(No AF)","s1","s2", "s3", "s4", "s5", "s6","s7","s8","s9")) +
   facet_grid(vy_factor~Occlusion_factor) +
-  scale_x_discrete(name = "Gravity (g)", 
-                 labels=c("0.7g", "0.85g", "1g", "1.15g", "1.3g"))
-ggsave("SimulatedMeans.jpg", w=6, h=6)
+  scale_x_continuous(name = "Gravity (m/s²)")
+ggsave("SimulatedMeans.jpg", w=8, h=8)
+
+
 
 ####compare squared mean errors for both models
 Errors_Mean %>% 
   group_by(Condition,vy,LongOcclusion,TypeOfError) %>% 
   mutate(RootMeanSquaredError = round((mean((Error-ActualError)^2))^0.5,5)) %>%
   select(Condition,vy,LongOcclusion,TypeOfError,RootMeanSquaredError) %>%
-  filter(TypeOfError != "Obs. Error") %>% 
+  filter(TypeOfError %in% c("Error (Sim, AF)","Error (Sim, No AF)")) %>% 
   slice(1) #####Mean Squared Error between AF-Observed and No AF-Observed for all conditions separate
 
 Errors_Mean %>% 
   group_by(TypeOfError) %>% 
   mutate(RootMeanSquaredError = round((mean((Error-ActualError)^2))^0.5,5)) %>%
   select(Condition,vy,LongOcclusion,TypeOfError,RootMeanSquaredError) %>%
-  filter(TypeOfError != "Obs. Error") %>% 
+  filter(TypeOfError %in% c("Error (Sim, AF)","Error (Sim, No AF)")) %>% 
   slice(1) #####Mean Squared Error between AF-Observed and No AF-Observed collapsed across conditions
 
 ###############################################################################################################
@@ -753,8 +782,8 @@ Optimized_SD_Gravity = Optimization2$minimum
 
 #get the correspondance in terms of "Weber fractions"
 Optimized_SD_Gravity*9.81 #non-standardized standard deviation
-pnorm(11.245,9.81,Optimized_SD_Gravity*9.81)
-11.245/9.81 #Weber Fraction
+pnorm(11.19,9.81,Optimized_SD_Gravity*9.81)
+11.19/9.81 #Weber Fraction
 
 
 
@@ -819,9 +848,9 @@ GetMatchForBoth = function(SD){
 }
 
 OptimTest = optim(c(0.04,0.2),GetMatchForBoth)
-SD_Gravity*9.81 #non standardized standard deviation of the strong gravity prior
-pnorm(11.01,9.81,SD_Gravity*9.81) #Weber Fraction is the difference between the mean and that point on a cummulative Gaussian where mean and standard deviation yield 0.25/0.75 ...
-11.01/9.81 #... in percent.
+OptimTest$par[1]*9.81 #non standardized standard deviation of the strong gravity prior
+pnorm(11.21,9.81,OptimTest$par[1]*9.81) #Weber Fraction is the difference between the mean and that point on a cummulative Gaussian where mean and standard deviation yield 0.25/0.75 ...
+11.21/9.81 #... in percent.
 
 
 
