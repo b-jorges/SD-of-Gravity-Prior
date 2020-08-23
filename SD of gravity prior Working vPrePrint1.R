@@ -366,7 +366,7 @@ mod6 = lmer(
 anova(mod1,mod2,) #yes it does differ
 summary(mod1) #lower precision for -1g
 
-?anova
+
 ############################
 #########SIMULATIONS########
 ############################
